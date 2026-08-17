@@ -129,6 +129,11 @@ service cloud.firestore {
       }
     }
 
+    // ── 채팅 읽음 상태 (문서 id = 본인 uid, 본인만 읽고 쓸 수 있음) ─────
+    match /junhakgong_chongmu/data/readState/{uid} {
+      allow read, write: if isApproved() && request.auth.uid == uid;
+    }
+
     // ── 의견 게시판 ─────────────────────────────────────────
     match /junhakgong_chongmu/data/opinions/{id} {
       allow read: if isApproved();

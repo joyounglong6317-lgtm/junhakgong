@@ -420,7 +420,7 @@
       <h2>회비 납부 현황</h2>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
         <input type="month" id="duesMonthFilter" onchange="renderDues()" style="width:150px;">
-        <button class="btn gold sm" onclick="sendDuesReminder()">💬 카카오톡으로 납부 안내</button>
+        <button class="btn gold sm admin-only hidden" onclick="sendDuesReminder()">💬 카카오톡으로 납부 안내</button>
         <button class="btn outline sm admin-only hidden" onclick="openDuesSetting()">회비 설정</button>
       </div>
     </div>
@@ -563,8 +563,8 @@
   <div class="panel" id="panel-chat">
     <div class="sec-head"><h2>채팅</h2></div>
     <div class="tt-subtabs">
-      <div class="tt-subtab" data-cview="group" onclick="switchChatView('group')">단체 채팅</div>
-      <div class="tt-subtab" data-cview="dm" onclick="switchChatView('dm')">1:1 채팅</div>
+      <div class="tt-subtab" data-cview="group" onclick="switchChatView('group')">단체 채팅<span class="tab-dot hidden" id="groupChatDot"></span></div>
+      <div class="tt-subtab" data-cview="dm" onclick="switchChatView('dm')">1:1 채팅<span class="tab-dot hidden" id="dmChatDot"></span></div>
     </div>
 
     <div id="chat-group">
@@ -678,16 +678,15 @@
       (예: https://사용자명.github.io) 를 등록해야 공유 버튼이 작동합니다.
 ===================================================================== */
 const firebaseConfig = {
-  apiKey: "AIzaSyBtjjq3BPhb5yKRmCZzUzp2O9TB1EDMVys",
-  authDomain: "accountingteacher.firebaseapp.com",
-  projectId: "accountingteacher",
-  storageBucket: "accountingteacher.firebasestorage.app",
-  messagingSenderId: "906019087676",
-  appId: "1:906019087676:web:7eff770883e63c20876a39",
-  measurementId: "G-26R1YNX7JY"
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT.firebaseapp.com",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT.appspot.com",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId: "YOUR_APP_ID"
 };
 const ALLOWED_EMAIL_DOMAIN = ""; // 예: "hanil.hs.kr" 처럼 설정하면 해당 도메인 이메일만 가입 안내 (실질 차단은 firestore.rules에서)
-const KAKAO_JS_KEY = "1f1940567a605cafe57c0eb095cb0e2f"; // developers.kakao.com 에서 발급받은 JavaScript 키
+const KAKAO_JS_KEY = ""; // developers.kakao.com 에서 발급받은 JavaScript 키
 
 let db = null, auth = null, storage = null, firebaseReady = false;
 try{
@@ -730,7 +729,7 @@ function shareEventToKakao(id){
 const COL = "junhakgong_chongmu";
 let currentUser = null;
 let isAdmin = false;
-let state = { members:[], dues:[], expenses:[], surveys:[], responses:[], opinions:[], notices:[], events:[], timetables:[], ttPeriods:7, monthlyAmount:0, dueDay:17, baseBalance:0, orgName:"전학공 총무장부", allUsers:[], groupMessages:[], dmThreads:[], dmMessages:[] };
+let state = { members:[], dues:[], expenses:[], surveys:[], responses:[], opinions:[], notices:[], events:[], timetables:[], ttPeriods:7, monthlyAmount:0, dueDay:17, baseBalance:0, orgName:"전학공 총무장부", allUsers:[], groupMessages:[], dmThreads:[], dmMessages:[], readState:{ groupLastRead:null, dmLastRead:{} } };
 let draftReceiptBase64 = null;
 let draftQuestions = [];
 let calYear = new Date().getFullYear(), calMonth = new Date().getMonth();
@@ -873,7 +872,11 @@ function showTab(name){
   event.currentTarget.classList.add('active');
   if(name==='calendar') renderCalendar();
   if(name==='timetable') renderTimetable();
-  if(name==='chat') { renderChat(); scrollGroupChatToBottom(); }
+  if(name==='chat') {
+    renderChat(); scrollGroupChatToBottom();
+    if(chatView==='group') markGroupRead();
+    else if(chatView==='dm' && dmActiveUid) markDMRead(dmThreadId(dmActiveUid));
+  }
 }
 function toggleForm(id){ document.getElementById(id).classList.toggle('open'); }
 
@@ -940,10 +943,20 @@ function initSync(){
     const wasNearBottom = isGroupChatNearBottom();
     state.groupMessages = snap.docs.map(d=>({id:d.id, ...d.data()}));
     renderGroupChat();
+    updateChatDots();
     if(wasNearBottom) scrollGroupChatToBottom();
+    // 채팅 탭의 단체채팅 화면을 이미 보고 있는 중이면 새 메시지를 바로 읽음 처리
+    if(document.getElementById('panel-chat').classList.contains('active') && chatView==='group') markGroupRead();
   });
   db.collection(COL).doc('data').collection('dmThreads').where('participants','array-contains', currentUser.uid).onSnapshot(snap=>{
     state.dmThreads = snap.docs.map(d=>({id:d.id, ...d.data()})).sort((a,b)=> (b.lastAt||"").localeCompare(a.lastAt||""));
+    renderDMList();
+    updateChatDots();
+  });
+  db.collection(COL).doc('data').collection('readState').doc(currentUser.uid).onSnapshot(doc=>{
+    state.readState = doc.exists ? Object.assign({groupLastRead:null, dmLastRead:{}}, doc.data()) : { groupLastRead:null, dmLastRead:{} };
+    if(!state.readState.dmLastRead) state.readState.dmLastRead = {};
+    updateChatDots();
     renderDMList();
   });
 }
@@ -1022,7 +1035,7 @@ function renderNotices(){
         </div>
         <div class="notice-body">${esc(n.body)}</div>
         ${(n.attachments && n.attachments.length) ? `<div class="notice-attachments">${n.attachments.map(a=>`<a class="attach-chip" href="${a.url}" target="_blank" rel="noopener">📎 ${esc(a.name)} <span class="attach-size">${formatFileSize(a.size)}</span></a>`).join('')}</div>` : ''}
-        <div class="notice-actions" style="justify-content:flex-start;">
+        <div class="notice-actions admin-only ${isAdmin?'':'hidden'}" style="justify-content:flex-start;">
           <button class="btn outline sm" onclick="shareNoticeToKakao('${n.id}')">💬 카카오톡 공유</button>
         </div>
         <div class="notice-actions admin-only ${isAdmin?'':'hidden'}">
@@ -1110,7 +1123,7 @@ function renderEventList(){
           <b>${esc(e.title)}</b>
           <div>${e.location?esc(e.location)+' · ':''}${esc(e.desc||'')}</div>
         </div>
-        <button class="btn outline sm" onclick="shareEventToKakao('${e.id}')">💬 공유</button>
+        <button class="btn outline sm admin-only ${isAdmin?'':'hidden'}" onclick="shareEventToKakao('${e.id}')">💬 공유</button>
         <span class="admin-only ${isAdmin?'':'hidden'}"><span class="link-x" onclick="deleteEvent('${e.id}')">삭제</span></span>
       </div>
     `).join('');
@@ -1545,7 +1558,47 @@ function switchChatView(v){
   document.querySelectorAll('#panel-chat .tt-subtab').forEach(b=> b.classList.toggle('active', b.dataset.cview===chatView));
   document.getElementById('chat-group').classList.toggle('hidden', chatView!=='group');
   document.getElementById('chat-dm').classList.toggle('hidden', chatView!=='dm');
-  if(chatView==='group') scrollGroupChatToBottom();
+  if(chatView==='group'){ scrollGroupChatToBottom(); markGroupRead(); }
+  else if(chatView==='dm' && dmActiveUid){ markDMRead(dmThreadId(dmActiveUid)); }
+}
+function isGroupUnread(){
+  if(!state.groupMessages.length) return false;
+  const last = state.groupMessages[state.groupMessages.length-1];
+  if(!currentUser || last.senderUid === currentUser.uid) return false;
+  const readAt = state.readState.groupLastRead;
+  return !readAt || last.createdAt > readAt;
+}
+function isDMThreadUnread(thread){
+  if(!currentUser || !thread.lastSenderUid || thread.lastSenderUid === currentUser.uid) return false;
+  const readAt = (state.readState.dmLastRead || {})[thread.id];
+  return !readAt || (thread.lastAt||'') > readAt;
+}
+function updateChatDots(){
+  if(!currentUser) return;
+  const groupUnread = isGroupUnread();
+  const dmUnread = state.dmThreads.some(t=> isDMThreadUnread(t));
+  const chatDot = document.getElementById('chatDot');
+  const groupDot = document.getElementById('groupChatDot');
+  const dmDot = document.getElementById('dmChatDot');
+  if(chatDot) chatDot.classList.toggle('hidden', !(groupUnread || dmUnread));
+  if(groupDot) groupDot.classList.toggle('hidden', !groupUnread);
+  if(dmDot) dmDot.classList.toggle('hidden', !dmUnread);
+}
+function markGroupRead(){
+  if(!currentUser) return;
+  const latest = state.groupMessages.length ? state.groupMessages[state.groupMessages.length-1].createdAt : new Date().toISOString();
+  if(state.readState.groupLastRead === latest) return;
+  state.readState.groupLastRead = latest;
+  db.collection(COL).doc('data').collection('readState').doc(currentUser.uid).set({ groupLastRead: latest }, {merge:true});
+  updateChatDots();
+}
+function markDMRead(threadId){
+  if(!currentUser) return;
+  const now = new Date().toISOString();
+  state.readState.dmLastRead = state.readState.dmLastRead || {};
+  state.readState.dmLastRead[threadId] = now;
+  db.collection(COL).doc('data').collection('readState').doc(currentUser.uid).set({ [`dmLastRead.${threadId}`]: now }, {merge:true});
+  updateChatDots();
 }
 function renderChat(){
   document.querySelectorAll('#panel-chat .tt-subtab').forEach(b=> b.classList.toggle('active', b.dataset.cview===chatView));
@@ -1598,37 +1651,64 @@ function renderGroupChat(){
 }
 
 function dmThreadId(otherUid){ return [currentUser.uid, otherUid].sort().join('_'); }
-function openDM(otherUid){
+async function openDM(otherUid){
   dmActiveUid = otherUid;
   if(dmMessagesUnsub) dmMessagesUnsub();
+  document.getElementById('dmInput').disabled = true;
+  document.getElementById('dmSendBtn').disabled = true;
+  renderDMList();
+  renderDMThread();
+
   const threadId = dmThreadId(otherUid);
-  dmMessagesUnsub = db.collection(COL).doc('data').collection('dmThreads').doc(threadId).collection('messages')
+  const otherUser = state.allUsers.find(u=>u.uid===otherUid);
+  const threadRef = db.collection(COL).doc('data').collection('dmThreads').doc(threadId);
+  try{
+    // 대화방 문서를 먼저 만들어(이미 있으면 유지) 보안 규칙이 요구하는 참여자 정보가
+    // 메시지를 주고받기 전에 반드시 서버에 존재하도록 보장합니다.
+    await threadRef.set({
+      participants: [currentUser.uid, otherUid],
+      participantNames: { [currentUser.uid]: currentUser.name, [otherUid]: otherUser ? otherUser.name : '' }
+    }, {merge:true});
+  }catch(e){
+    console.error(e);
+    toast("대화방을 여는 데 실패했습니다.");
+    return;
+  }
+  if(dmActiveUid !== otherUid) return; // 그 사이 다른 대화를 열었으면 중단
+
+  dmMessagesUnsub = threadRef.collection('messages')
     .orderBy('createdAt','asc').onSnapshot(snap=>{
       state.dmMessages = snap.docs.map(d=>({id:d.id, ...d.data()}));
       renderDMThread();
       const el = document.getElementById('dmMessages');
       if(el) el.scrollTop = el.scrollHeight;
-    });
+      // 이 대화방을 보고 있는 중에 새 메시지가 오면 바로 읽음 처리
+      if(dmActiveUid === otherUid) markDMRead(threadId);
+    }, err=> console.error('dm listen error', err));
   document.getElementById('dmInput').disabled = false;
   document.getElementById('dmSendBtn').disabled = false;
+  markDMRead(threadId);
   renderDMList();
   renderDMThread();
 }
-function sendDM(){
+async function sendDM(){
   if(!dmActiveUid){ toast("대화 상대를 먼저 선택하세요."); return; }
   const input = document.getElementById('dmInput');
   const text = input.value.trim();
   if(!text) return;
-  const otherUser = state.allUsers.find(u=>u.uid===dmActiveUid);
   const threadId = dmThreadId(dmActiveUid);
   const threadRef = db.collection(COL).doc('data').collection('dmThreads').doc(threadId);
-  threadRef.set({
-    participants: [currentUser.uid, dmActiveUid],
-    participantNames: { [currentUser.uid]: currentUser.name, [dmActiveUid]: otherUser ? otherUser.name : '' },
-    lastMessage: text, lastAt: new Date().toISOString(), lastSenderUid: currentUser.uid
-  }, {merge:true});
-  threadRef.collection('messages').add({ senderUid:currentUser.uid, senderName:currentUser.name, text, createdAt:new Date().toISOString() });
   input.value = '';
+  try{
+    // 대화방 메타정보(마지막 메시지 등)를 먼저 반영한 뒤 메시지를 추가해야
+    // 보안 규칙의 참여자 확인이 항상 통과합니다.
+    await threadRef.set({ lastMessage: text, lastAt: new Date().toISOString(), lastSenderUid: currentUser.uid }, {merge:true});
+    await threadRef.collection('messages').add({ senderUid:currentUser.uid, senderName:currentUser.name, text, createdAt:new Date().toISOString() });
+  }catch(e){
+    console.error(e);
+    toast("메시지 전송에 실패했습니다.");
+    input.value = text; // 실패 시 입력 내용 복원
+  }
 }
 function renderDMList(){
   const wrap = document.getElementById('dmList');
@@ -1643,11 +1723,12 @@ function renderDMList(){
     html += state.dmThreads.map(t=>{
       const otherUid = t.participants.find(p=>p!==currentUser.uid);
       const otherName = (t.participantNames && t.participantNames[otherUid]) || '(알 수 없음)';
+      const unread = isDMThreadUnread(t);
       return `
         <div class="dm-list-item ${dmActiveUid===otherUid?'active':''}" onclick="openDM('${otherUid}')">
           <div class="dm-avatar">${esc((otherName||'?').slice(0,1))}</div>
           <div class="dm-list-info">
-            <div class="dm-list-name">${esc(otherName)}</div>
+            <div class="dm-list-name">${esc(otherName)}${unread?' <span class="tab-dot" style="position:relative;top:-1px;"></span>':''}</div>
             <div class="dm-list-preview">${t.lastSenderUid===currentUser.uid?'나: ':''}${esc(t.lastMessage||'')}</div>
           </div>
         </div>`;
