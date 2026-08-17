@@ -1,0 +1,141 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── 공통 함수 ──────────────────────────────────────────
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function verified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+    function myUserDoc() {
+      return get(/databases/$(database)/documents/junhakgong_chongmu/data/users/$(request.auth.uid)).data;
+    }
+    function isApproved() {
+      return verified() && myUserDoc().status == 'approved';
+    }
+    function isAdmin() {
+      return verified() && myUserDoc().status == 'approved' && myUserDoc().role == 'admin';
+    }
+
+    // (선택) 특정 학교 이메일 도메인만 가입 허용하려면 아래 주석을 해제하고
+    // 본인 도메인으로 바꾼 뒤, users 컬렉션 create 규칙의 && 조건에 추가하세요.
+    // function isAllowedDomain() {
+    //   return request.resource.data.email.matches('.*@hanil[.]hs[.]kr$');
+    // }
+
+    // ── 설정 (조직명, 학기 정보) ─────────────────────────────
+    match /junhakgong_chongmu/settings {
+      allow read: if isApproved();
+      allow write: if isAdmin();
+    }
+
+    // ── 계정 (회원가입 / 승인 / 권한) ──────────────────────────
+    match /junhakgong_chongmu/data/users/{uid} {
+      // 본인 문서 또는 관리자만 읽기 가능
+      allow get: if isSignedIn() && (request.auth.uid == uid || isAdmin());
+      // 승인 대기목록 등 전체 목록 조회는 관리자만
+      allow list: if isAdmin();
+
+      // 가입 시 클라이언트가 role/status를 임의로 admin/approved 로 설정하는 것을 서버에서 원천 차단
+      allow create: if isSignedIn() && request.auth.uid == uid
+                    && request.resource.data.role == 'member'
+                    && request.resource.data.status == 'pending';
+                    // && isAllowedDomain()  // 이메일 도메인 제한 사용 시 주석 해제
+
+      // 관리자는 누구의 role/status 든 변경 가능
+      // 본인은 이름/소속 등 다른 필드만 수정 가능 (role, status는 불변)
+      allow update: if isAdmin()
+                    || (isSignedIn() && request.auth.uid == uid
+                        && request.resource.data.role == resource.data.role
+                        && request.resource.data.status == resource.data.status);
+
+      allow delete: if isAdmin();
+    }
+
+    // ── 회비 대상자 명단 ─────────────────────────────────────
+    match /junhakgong_chongmu/data/members/{id} {
+      allow read: if isApproved();
+      allow write: if isAdmin();
+    }
+
+    // ── 회비 납부 기록 ───────────────────────────────────────
+    match /junhakgong_chongmu/data/dues/{id} {
+      allow read: if isApproved();
+      allow write: if isAdmin();
+    }
+
+    // ── 지출 및 증빙 ────────────────────────────────────────
+    match /junhakgong_chongmu/data/expenses/{id} {
+      allow read: if isApproved();
+      allow write: if isAdmin();
+    }
+
+    // ── 수요조사 ───────────────────────────────────────────
+    match /junhakgong_chongmu/data/surveys/{id} {
+      allow read: if isApproved();
+      allow write: if isAdmin();
+    }
+    match /junhakgong_chongmu/data/responses/{id} {
+      allow read: if isApproved();
+      // 본인 이름(uid)으로만 응답 생성 가능 (타인 명의 응답 방지)
+      allow create: if isApproved() && request.resource.data.respondentUid == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+
+    // ── 공지사항 ───────────────────────────────────────────
+    match /junhakgong_chongmu/data/notices/{id} {
+      allow read: if isApproved();
+      allow write: if isAdmin();
+    }
+
+    // ── 일정 ──────────────────────────────────────────────
+    match /junhakgong_chongmu/data/events/{id} {
+      allow read: if isApproved();
+      allow write: if isAdmin();
+    }
+
+    // ── 선생님 시간표 (문서 id = 작성자 uid) ───────────────────
+    match /junhakgong_chongmu/data/timetables/{uid} {
+      allow read: if isApproved();
+      // 본인 시간표는 본인이, 그 외엔 관리자만 수정 가능
+      allow write: if isAdmin() || (isApproved() && request.auth.uid == uid);
+    }
+
+    // ── 단체 채팅 ───────────────────────────────────────────
+    match /junhakgong_chongmu/data/groupMessages/{id} {
+      allow read: if isApproved();
+      allow create: if isApproved() && request.resource.data.senderUid == request.auth.uid;
+      allow delete: if isAdmin() || (isApproved() && resource.data.senderUid == request.auth.uid);
+      allow update: if false;
+    }
+
+    // ── 1:1 채팅 (문서 id = 정렬된 두 uid를 '_'로 연결) ───────────
+    match /junhakgong_chongmu/data/dmThreads/{threadId} {
+      allow read: if isApproved() && request.auth.uid in resource.data.participants;
+      allow create: if isApproved() && request.auth.uid in request.resource.data.participants
+                    && request.resource.data.participants.size() == 2;
+      allow update: if isApproved() && request.auth.uid in resource.data.participants
+                    && request.auth.uid in request.resource.data.participants;
+
+      match /messages/{msgId} {
+        allow read: if isApproved()
+                    && request.auth.uid in get(/databases/$(database)/documents/junhakgong_chongmu/data/dmThreads/$(threadId)).data.participants;
+        allow create: if isApproved()
+                    && request.auth.uid in get(/databases/$(database)/documents/junhakgong_chongmu/data/dmThreads/$(threadId)).data.participants
+                    && request.resource.data.senderUid == request.auth.uid;
+        allow update, delete: if false;
+      }
+    }
+
+    // ── 의견 게시판 ─────────────────────────────────────────
+    match /junhakgong_chongmu/data/opinions/{id} {
+      allow read: if isApproved();
+      allow create: if isApproved() && request.resource.data.authorUid == request.auth.uid;
+      allow update, delete: if isAdmin() || (isSignedIn() && resource.data.authorUid == request.auth.uid);
+    }
+
+    // 그 외 모든 경로는 기본적으로 차단
+  }
+}

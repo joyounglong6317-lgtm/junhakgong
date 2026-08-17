@@ -1,0 +1,1592 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>전학공 총무장부</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@500;600;700;900&family=Pretendard:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<style>
+  :root{
+    --ink:#1C2B39; --ink-soft:#3C4E5E; --paper:#FBF8F2; --paper-line:#E4DDCB; --card:#FFFFFF;
+    --green:#2F6F4F; --green-soft:#E7F1EA; --red:#B23A2F; --red-soft:#F8EAE7;
+    --gold:#C69A3C; --gold-soft:#FBF2DF;
+    --shadow: 0 1px 2px rgba(28,43,57,.06), 0 8px 24px -12px rgba(28,43,57,.15);
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--paper); color:var(--ink); font-family:'Pretendard',-apple-system,sans-serif;
+    background-image: linear-gradient(var(--paper-line) 1px, transparent 1px);
+    background-size: 100% 42px; min-height:100vh;
+  }
+  ::selection{ background:var(--gold-soft); }
+  .hidden{ display:none !important; }
+
+  .auth-wrap{ min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px; }
+  .auth-card{ background:var(--card); border:1px solid var(--paper-line); border-radius:14px; box-shadow:var(--shadow); padding:36px 34px; width:100%; max-width:400px; }
+  .auth-mark{ width:54px; height:54px; border:2px solid var(--ink); border-radius:4px; display:flex; align-items:center; justify-content:center; font-family:'Noto Serif KR'; font-weight:900; font-size:24px; margin:0 auto 14px; }
+  .auth-title{ font-family:'Noto Serif KR'; font-weight:700; font-size:19px; text-align:center; margin:0 0 4px; }
+  .auth-sub{ font-size:12.5px; color:var(--ink-soft); text-align:center; margin:0 0 22px; }
+  .auth-field{ margin-bottom:12px; }
+  .auth-field label{ font-size:11.5px; color:var(--ink-soft); display:block; margin-bottom:4px; }
+  .auth-switch{ text-align:center; margin-top:16px; font-size:12.5px; color:var(--ink-soft); }
+  .auth-switch a{ color:var(--green); cursor:pointer; font-weight:600; }
+  .auth-forgot{ text-align:right; font-size:11.5px; margin-top:-4px; margin-bottom:14px; }
+  .auth-forgot a{ color:var(--ink-soft); cursor:pointer; }
+  .auth-msg{ font-size:12px; padding:9px 12px; border-radius:7px; margin-bottom:14px; display:none; line-height:1.5; }
+  .auth-msg.show{ display:block; }
+  .auth-msg.err{ background:var(--red-soft); color:var(--red); }
+  .auth-msg.ok{ background:var(--green-soft); color:var(--green); }
+  .pending-badge{ width:64px; height:64px; border-radius:50%; background:var(--gold-soft); border:2px solid var(--gold); display:flex; align-items:center; justify-content:center; margin:0 auto 16px; font-size:26px; }
+  .auth-hint{ font-size:11px; color:#B5AE99; margin-top:-8px; margin-bottom:12px; line-height:1.5; }
+
+  .app{ max-width:1180px; margin:0 auto; padding:0 20px 80px; }
+  .letterhead{ display:flex; align-items:center; justify-content:space-between; padding:28px 4px 18px; border-bottom:3px double var(--ink); margin-bottom:22px; gap:14px; flex-wrap:wrap; }
+  .letterhead-left{ display:flex; align-items:center; gap:16px; }
+  .brand-mark{ width:52px; height:52px; border:2px solid var(--ink); border-radius:3px; display:flex; align-items:center; justify-content:center; font-family:'Noto Serif KR'; font-weight:900; font-size:22px; color:var(--ink); flex-shrink:0; background:var(--card); }
+  .brand-text h1{ font-family:'Noto Serif KR'; font-weight:700; font-size:22px; margin:0; letter-spacing:-0.2px; }
+  .brand-text p{ margin:3px 0 0; font-size:12.5px; color:var(--ink-soft); }
+  .org-input{ border:none; background:transparent; font-family:'Noto Serif KR'; font-weight:700; font-size:22px; color:var(--ink); padding:0; width:280px; }
+  .org-input:focus{ outline:none; border-bottom:1px dashed var(--gold); }
+  .letterhead-right{ text-align:right; font-size:12px; color:var(--ink-soft); display:flex; flex-direction:column; align-items:flex-end; gap:6px; }
+  .user-chip{ display:flex; align-items:center; gap:8px; font-size:12.5px; padding:6px 12px; border-radius:20px; border:1px solid var(--paper-line); background:var(--card); }
+  .role-badge{ font-size:10px; padding:2px 8px; border-radius:10px; font-weight:700; }
+  .role-badge.admin{ background:var(--gold-soft); color:#8a6a1f; }
+  .role-badge.member{ background:var(--green-soft); color:var(--green); }
+  .logout-link{ color:var(--red); cursor:pointer; font-weight:600; }
+
+  .tabs{ display:flex; gap:4px; margin-bottom:20px; overflow-x:auto; }
+  .tab{ font-family:'Noto Serif KR'; font-weight:600; font-size:14px; padding:11px 18px 9px; background:var(--card); color:var(--ink-soft); border:1px solid var(--paper-line); border-bottom:none; border-radius:8px 8px 0 0; cursor:pointer; white-space:nowrap; position:relative; top:1px; }
+  .tab.active{ color:var(--ink); background:var(--paper); border-color:var(--ink); border-bottom:1px solid var(--paper); }
+  .tab .tab-num{ font-family:'IBM Plex Mono'; font-size:10px; color:var(--gold); margin-right:6px; }
+  .tab .tab-dot{ display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--red); margin-left:6px; }
+
+  .panel{ display:none; }
+  .panel.active{ display:block; animation:fade .25s ease; }
+  @keyframes fade{ from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:translateY(0);} }
+
+  .summary-row{ display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:22px; }
+  .sum-card{ background:var(--card); border:1px solid var(--paper-line); border-radius:10px; padding:16px 18px; box-shadow:var(--shadow); }
+  .sum-card .label{ font-size:12px; color:var(--ink-soft); margin-bottom:6px; }
+  .sum-card .value{ font-family:'IBM Plex Mono'; font-weight:600; font-size:22px; }
+  .sum-card .value.green{ color:var(--green); }
+  .sum-card .value.red{ color:var(--red); }
+  .sum-card .sub{ font-size:11px; color:#9AA5AD; margin-top:4px; }
+
+  .sec-head{ display:flex; align-items:center; justify-content:space-between; margin:26px 0 12px; flex-wrap:wrap; gap:8px; }
+  .sec-head h2{ font-family:'Noto Serif KR'; font-size:17px; margin:0; display:flex; align-items:center; gap:8px; }
+  .sec-head h2::before{ content:''; width:5px; height:5px; background:var(--gold); border-radius:50%; display:inline-block; }
+  .btn{ font-family:'Pretendard'; font-weight:600; font-size:12.5px; border:1px solid var(--ink); background:var(--ink); color:#fff; padding:8px 14px; border-radius:6px; cursor:pointer; transition:opacity .15s; }
+  .btn:hover{ opacity:.85; }
+  .btn.outline{ background:transparent; color:var(--ink); }
+  .btn.gold{ background:var(--gold); border-color:var(--gold); }
+  .btn.red{ background:var(--red); border-color:var(--red); }
+  .btn.green{ background:var(--green); border-color:var(--green); }
+  .btn:disabled{ opacity:.35; cursor:not-allowed; }
+  .btn.sm{ padding:5px 10px; font-size:11.5px; border-radius:5px; }
+  .btn.block{ width:100%; padding:10px; }
+
+  .ledger{ background:var(--card); border:1px solid var(--paper-line); border-radius:10px; overflow:hidden; box-shadow:var(--shadow); }
+  table{ width:100%; border-collapse:collapse; font-size:13.5px; }
+  thead th{ text-align:left; font-weight:600; font-size:11.5px; color:var(--ink-soft); background:#F5F1E7; padding:10px 14px; border-bottom:1px solid var(--paper-line); letter-spacing:.2px; }
+  tbody td{ padding:11px 14px; border-bottom:1px solid #F0ECDF; vertical-align:middle; }
+  tbody tr:last-child td{ border-bottom:none; }
+  tbody tr:hover{ background:#FCFAF4; }
+  td.num, th.num{ text-align:right; font-family:'IBM Plex Mono'; }
+  .muted{ color:#9AA5AD; }
+
+  .stamp-btn{ display:inline-flex; align-items:center; justify-content:center; width:62px; height:34px; border:2px solid var(--red); border-radius:6px; color:var(--red); font-family:'Noto Serif KR'; font-weight:700; font-size:12px; background:transparent; cursor:pointer; transform:rotate(-4deg); letter-spacing:1px; transition:transform .12s; }
+  .stamp-btn:hover{ transform:rotate(-4deg) scale(1.05); }
+  .stamp-btn.paid{ border-color:var(--green); color:var(--green); background:var(--green-soft); animation:stampdown .25s ease; }
+  @keyframes stampdown{ 0%{ transform:rotate(-4deg) scale(1.7); opacity:0;} 60%{transform:rotate(-4deg) scale(.92); opacity:1;} 100%{transform:rotate(-4deg) scale(1);} }
+
+  input[type=text], input[type=number], input[type=date], input[type=time], input[type=email], input[type=password], select, textarea{
+    font-family:'Pretendard'; font-size:13px; padding:8px 10px; border:1px solid var(--paper-line); border-radius:6px; background:#fff; color:var(--ink); width:100%;
+  }
+  input:focus, select:focus, textarea:focus{ outline:none; border-color:var(--gold); }
+  label.chk{ display:flex; align-items:center; gap:6px; font-size:12px; color:var(--ink-soft); }
+  label.chk input{ width:auto; }
+
+  .form-card{ background:var(--card); border:1px dashed var(--paper-line); border-radius:10px; padding:16px; margin-bottom:16px; display:none; }
+  .form-card.open{ display:block; animation:fade .2s ease; }
+  .form-grid{ display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:10px; }
+  .form-grid label{ font-size:11px; color:var(--ink-soft); display:block; margin-bottom:4px; }
+  .form-actions{ display:flex; gap:8px; justify-content:flex-end; }
+
+  .receipt-thumb{ width:38px; height:38px; border-radius:5px; object-fit:cover; border:1px solid var(--paper-line); cursor:pointer; }
+  .no-receipt{ font-size:11px; color:#C6BFA9; }
+
+  .survey-card{ background:var(--card); border:1px solid var(--paper-line); border-radius:10px; padding:16px 18px; margin-bottom:14px; box-shadow:var(--shadow); }
+  .survey-top{ display:flex; justify-content:space-between; align-items:flex-start; gap:10px; flex-wrap:wrap; }
+  .survey-title{ font-family:'Noto Serif KR'; font-weight:700; font-size:15.5px; }
+  .survey-meta{ font-size:11.5px; color:var(--ink-soft); margin-top:3px; }
+  .badge{ font-size:10.5px; padding:3px 9px; border-radius:12px; font-weight:600; }
+  .badge.open{ background:var(--green-soft); color:var(--green); }
+  .badge.closed{ background:#EEE; color:#888; }
+  .badge.pin{ background:var(--red-soft); color:var(--red); }
+  .q-block{ margin-top:14px; padding-top:12px; border-top:1px solid #F0ECDF; }
+  .q-title{ font-weight:600; font-size:13.5px; margin-bottom:8px; }
+  .bar-row{ display:flex; align-items:center; gap:8px; margin:5px 0; font-size:12.5px; }
+  .bar-label{ width:110px; flex-shrink:0; color:var(--ink-soft); }
+  .bar-track{ flex:1; background:#F0ECDF; border-radius:4px; height:16px; overflow:hidden; }
+  .bar-fill{ height:100%; background:var(--gold); border-radius:4px; transition:width .4s ease; }
+  .bar-count{ width:30px; text-align:right; font-family:'IBM Plex Mono'; color:var(--ink-soft); }
+  .text-answer{ font-size:12.5px; padding:6px 10px; background:#FAF8F1; border-radius:6px; margin:4px 0; }
+
+  .q-item{ background:#FAF8F1; border-radius:8px; padding:10px 12px; margin-bottom:8px; }
+  .q-item-top{ display:flex; gap:8px; margin-bottom:6px; }
+  .opt-row{ display:flex; gap:6px; margin-bottom:5px; align-items:center; }
+  .opt-row input{ flex:1; }
+  .link-x{ color:var(--red); cursor:pointer; font-size:12px; padding:2px 6px; }
+
+  .opinion-card{ background:var(--card); border:1px solid var(--paper-line); border-radius:10px; padding:14px 16px; margin-bottom:10px; box-shadow:var(--shadow); }
+  .opinion-top{ display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; }
+  .opinion-author{ font-weight:700; font-size:13px; }
+  .opinion-date{ font-size:11px; color:#B5AE99; }
+  .opinion-text{ font-size:13.5px; line-height:1.6; white-space:pre-wrap; }
+  .opinion-actions{ margin-top:8px; text-align:right; }
+
+  .approval-card{ display:flex; justify-content:space-between; align-items:center; background:var(--card); border:1px solid var(--paper-line); border-radius:9px; padding:12px 16px; margin-bottom:8px; flex-wrap:wrap; gap:8px; }
+  .approval-info b{ font-family:'Noto Serif KR'; font-size:14px; }
+  .approval-info div{ font-size:11.5px; color:var(--ink-soft); margin-top:2px; }
+
+  /* notices */
+  .notice-card{ background:var(--card); border:1px solid var(--paper-line); border-radius:10px; padding:15px 18px; margin-bottom:10px; box-shadow:var(--shadow); }
+  .notice-card.pinned{ border-color:var(--gold); background:linear-gradient(180deg,var(--gold-soft),#fff 40%); }
+  .notice-top{ display:flex; justify-content:space-between; align-items:flex-start; gap:8px; }
+  .notice-title{ font-family:'Noto Serif KR'; font-weight:700; font-size:15px; }
+  .notice-meta{ font-size:11px; color:#B5AE99; margin-top:3px; }
+  .notice-body{ font-size:13.5px; line-height:1.65; white-space:pre-wrap; margin-top:10px; }
+  .notice-actions{ margin-top:10px; text-align:right; display:flex; gap:6px; justify-content:flex-end; }
+
+  /* calendar */
+  .cal-card{ background:var(--card); border:1px solid var(--paper-line); border-radius:10px; padding:16px 18px; box-shadow:var(--shadow); margin-bottom:20px; }
+  .cal-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+  .cal-head .cal-label{ font-family:'Noto Serif KR'; font-weight:700; font-size:16px; }
+  .cal-nav{ display:flex; gap:6px; }
+  .cal-nav button{ width:28px; height:28px; border-radius:6px; border:1px solid var(--paper-line); background:#fff; cursor:pointer; color:var(--ink-soft); font-size:13px; }
+  .cal-grid{ display:grid; grid-template-columns:repeat(7,1fr); gap:4px; }
+  .cal-weekday{ text-align:center; font-size:11px; color:var(--ink-soft); padding:4px 0 8px; font-weight:600; }
+  .cal-day{ position:relative; text-align:center; padding:9px 0 12px; border-radius:8px; cursor:default; font-size:12.5px; color:var(--ink); }
+  .cal-day.other-month{ color:#D8D2C4; }
+  .cal-day.has-event{ cursor:pointer; }
+  .cal-day.has-event:hover{ background:#F5F1E7; }
+  .cal-day.today .cal-daynum{ background:var(--ink); color:#fff; border-radius:50%; padding:2px 6px; }
+  .cal-day.selected{ background:var(--gold-soft); outline:1px solid var(--gold); }
+  .cal-dot{ position:absolute; bottom:4px; left:50%; transform:translateX(-50%); width:5px; height:5px; border-radius:50%; background:var(--gold); }
+  .event-card{ background:var(--card); border:1px solid var(--paper-line); border-radius:9px; padding:12px 16px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; box-shadow:var(--shadow); gap:10px; }
+  .event-date-chip{ font-family:'IBM Plex Mono'; font-size:11px; background:#F5F1E7; padding:5px 9px; border-radius:6px; color:var(--ink-soft); white-space:nowrap; }
+  .event-info b{ font-size:13.5px; }
+  .event-info div{ font-size:11.5px; color:var(--ink-soft); margin-top:2px; }
+
+  /* timetable */
+  .tt-subtabs{ display:flex; gap:6px; margin-bottom:16px; }
+  .tt-subtab{ font-size:12.5px; padding:7px 14px; border-radius:20px; border:1px solid var(--paper-line); background:var(--card); cursor:pointer; color:var(--ink-soft); font-weight:600; }
+  .tt-subtab.active{ background:var(--ink); color:#fff; border-color:var(--ink); }
+  .tt-day-tabs{ display:flex; gap:6px; margin-bottom:14px; }
+  .tt-day{ font-size:12.5px; padding:6px 16px; border-radius:20px; border:1px solid var(--paper-line); background:var(--card); cursor:pointer; color:var(--ink-soft); font-weight:600; }
+  .tt-day.active{ background:var(--gold); color:#fff; border-color:var(--gold); }
+  .tt-grid-table{ border-collapse:collapse; width:100%; }
+  .tt-grid-table th, .tt-grid-table td{ text-align:center; padding:6px 8px; border:1px solid #F0ECDF; font-size:12.5px; white-space:nowrap; }
+  .tt-grid-table th{ background:#F5F1E7; color:var(--ink-soft); font-weight:600; font-size:11.5px; }
+  .tt-cell-input{ width:100%; min-width:78px; text-align:center; font-size:12px; padding:5px 4px; }
+  .tt-free{ color:#C6BFA9; font-size:11.5px; }
+  .tt-teacher-name{ text-align:left !important; font-weight:600; }
+  .tt-subject{ font-size:12px; color:var(--ink); }
+
+  .dash-two-col{ display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:6px; }
+  .mini-card{ background:var(--card); border:1px solid var(--paper-line); border-radius:10px; padding:14px 16px; box-shadow:var(--shadow); }
+  .mini-card h3{ font-family:'Noto Serif KR'; font-size:13.5px; margin:0 0 10px; }
+  .mini-item{ font-size:12.5px; padding:7px 0; border-bottom:1px solid #F0ECDF; display:flex; justify-content:space-between; gap:8px; }
+  .mini-item:last-child{ border-bottom:none; }
+  .mini-item .mi-title{ color:var(--ink); }
+  .mini-item .mi-sub{ color:#B5AE99; font-family:'IBM Plex Mono'; font-size:11px; white-space:nowrap; }
+
+  /* chat */
+  .chat-frame{ background:var(--card); border:1px solid var(--paper-line); border-radius:10px; box-shadow:var(--shadow); overflow:hidden; display:flex; flex-direction:column; height:520px; }
+  .chat-messages{ flex:1; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:10px; }
+  .chat-bubble-row{ display:flex; flex-direction:column; max-width:72%; }
+  .chat-bubble-row.mine{ align-self:flex-end; align-items:flex-end; }
+  .chat-bubble-row.theirs{ align-self:flex-start; align-items:flex-start; }
+  .chat-sender{ font-size:11px; color:var(--ink-soft); margin-bottom:3px; font-weight:600; }
+  .chat-bubble{ padding:9px 13px; border-radius:14px; font-size:13px; line-height:1.5; white-space:pre-wrap; word-break:break-word; }
+  .chat-bubble-row.mine .chat-bubble{ background:var(--ink); color:#fff; border-bottom-right-radius:4px; }
+  .chat-bubble-row.theirs .chat-bubble{ background:#F0ECDF; color:var(--ink); border-bottom-left-radius:4px; }
+  .chat-time{ font-size:10px; color:#C6BFA9; margin-top:3px; }
+  .chat-input-row{ display:flex; gap:8px; padding:12px; border-top:1px solid var(--paper-line); background:#FCFAF4; }
+  .chat-input-row input{ flex:1; }
+
+  .dm-wrap{ display:grid; grid-template-columns:230px 1fr; gap:14px; height:560px; }
+  .dm-list{ background:var(--card); border:1px solid var(--paper-line); border-radius:10px; box-shadow:var(--shadow); overflow-y:auto; padding:8px; }
+  .dm-list-item{ display:flex; align-items:center; gap:9px; padding:9px 10px; border-radius:8px; cursor:pointer; }
+  .dm-list-item:hover{ background:#F5F1E7; }
+  .dm-list-item.active{ background:var(--gold-soft); }
+  .dm-avatar{ width:30px; height:30px; border-radius:50%; background:var(--ink); color:#fff; display:flex; align-items:center; justify-content:center; font-family:'Noto Serif KR'; font-size:12.5px; font-weight:700; flex-shrink:0; }
+  .dm-list-info{ overflow:hidden; }
+  .dm-list-name{ font-size:12.5px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .dm-list-preview{ font-size:11px; color:#B5AE99; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .dm-section-label{ font-size:10.5px; color:#B5AE99; padding:8px 10px 4px; font-weight:700; letter-spacing:.3px; }
+  .dm-thread{ background:var(--card); border:1px solid var(--paper-line); border-radius:10px; box-shadow:var(--shadow); display:flex; flex-direction:column; overflow:hidden; }
+  .dm-thread-head{ padding:13px 16px; border-bottom:1px solid var(--paper-line); font-family:'Noto Serif KR'; font-weight:700; font-size:14px; color:var(--ink-soft); }
+  @media (max-width:820px){
+    .dm-wrap{ grid-template-columns:1fr; height:auto; }
+    .dm-list{ max-height:180px; }
+    .chat-frame{ height:440px; }
+  }
+
+  .empty{ text-align:center; padding:50px 20px; color:#B5AE99; font-size:13px; }
+  .empty b{ display:block; font-family:'Noto Serif KR'; font-size:15px; color:var(--ink-soft); margin-bottom:4px; }
+  .empty.sm{ padding:20px; }
+
+  .modal-bg{ display:none; position:fixed; inset:0; background:rgba(28,43,57,.55); z-index:50; align-items:center; justify-content:center; }
+  .modal-bg.open{ display:flex; }
+  .modal{ background:#fff; border-radius:10px; padding:20px; max-width:520px; width:92%; max-height:85vh; overflow:auto; }
+  .modal img{ width:100%; border-radius:6px; }
+  .setup-note{ font-size:12px; color:var(--ink-soft); background:var(--gold-soft); border:1px solid var(--gold); border-radius:8px; padding:10px 14px; margin-bottom:18px; line-height:1.6; }
+  .setup-note code{ background:#fff; padding:1px 5px; border-radius:3px; font-family:'IBM Plex Mono'; font-size:11px; }
+  .toast{ position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(20px); background:var(--ink); color:#fff; padding:10px 18px; border-radius:8px; font-size:12.5px; opacity:0; transition:all .25s; z-index:99; pointer-events:none; }
+  .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+  @media (max-width:820px){
+    .summary-row{ grid-template-columns:repeat(2,1fr); }
+    .form-grid{ grid-template-columns:repeat(2,1fr); }
+    .dash-two-col{ grid-template-columns:1fr; }
+    table{ font-size:12px; }
+    .cal-day{ padding:7px 0 10px; font-size:11.5px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ AUTH SCREENS ============ -->
+<div class="auth-wrap" id="loginScreen">
+  <div class="auth-card">
+    <div class="auth-mark">總</div>
+    <div class="auth-title">전학공 총무장부</div>
+    <div class="auth-sub">상업과 교사 전용 · 로그인</div>
+    <div class="auth-msg" id="loginMsg"></div>
+    <div class="auth-field"><label>이메일</label><input type="email" id="loginEmail" placeholder="school@example.com"></div>
+    <div class="auth-field"><label>비밀번호</label><input type="password" id="loginPw" placeholder="비밀번호"></div>
+    <div class="auth-forgot"><a onclick="showScreen('reset')">비밀번호를 잊으셨나요?</a></div>
+    <button class="btn block" onclick="doLogin()">로그인</button>
+    <div class="auth-switch">아직 계정이 없으신가요? <a onclick="showScreen('signup')">회원가입</a></div>
+  </div>
+</div>
+
+<div class="auth-wrap hidden" id="signupScreen">
+  <div class="auth-card">
+    <div class="auth-mark">總</div>
+    <div class="auth-title">회원가입</div>
+    <div class="auth-sub">이메일 인증 → 총무 승인을 거쳐야 이용 가능합니다</div>
+    <div class="auth-msg" id="signupMsg"></div>
+    <div class="auth-field"><label>성명</label><input type="text" id="suName" placeholder="홍길동"></div>
+    <div class="auth-field"><label>소속/과목</label><input type="text" id="suDept" placeholder="예: 상업과·회계실무"></div>
+    <div class="auth-field"><label>이메일</label><input type="email" id="suEmail" placeholder="school@example.com"></div>
+    <div class="auth-field"><label>비밀번호</label><input type="password" id="suPw" placeholder="8자 이상 권장"></div>
+    <div class="auth-hint" id="domainHint"></div>
+    <button class="btn block" onclick="doSignup()">가입 신청</button>
+    <div class="auth-switch">이미 계정이 있으신가요? <a onclick="showScreen('login')">로그인으로 돌아가기</a></div>
+  </div>
+</div>
+
+<div class="auth-wrap hidden" id="resetScreen">
+  <div class="auth-card">
+    <div class="auth-mark">總</div>
+    <div class="auth-title">비밀번호 재설정</div>
+    <div class="auth-sub">가입한 이메일로 재설정 링크를 보내드립니다</div>
+    <div class="auth-msg" id="resetMsg"></div>
+    <div class="auth-field"><label>이메일</label><input type="email" id="resetEmail" placeholder="school@example.com"></div>
+    <button class="btn block" onclick="doReset()">재설정 메일 보내기</button>
+    <div class="auth-switch"><a onclick="showScreen('login')">로그인으로 돌아가기</a></div>
+  </div>
+</div>
+
+<div class="auth-wrap hidden" id="verifyScreen">
+  <div class="auth-card" style="text-align:center;">
+    <div class="pending-badge">✉️</div>
+    <div class="auth-title">이메일 인증이 필요합니다</div>
+    <div class="auth-sub" id="verifyEmailText" style="margin-bottom:20px;"></div>
+    <button class="btn block" onclick="checkVerified()" style="margin-bottom:8px;">인증 완료 확인</button>
+    <button class="btn outline block" onclick="resendVerification()" style="margin-bottom:8px;">인증 메일 재발송</button>
+    <button class="btn outline block" onclick="doLogout()">로그아웃</button>
+  </div>
+</div>
+
+<div class="auth-wrap hidden" id="pendingScreen">
+  <div class="auth-card" style="text-align:center;">
+    <div class="pending-badge" id="pendingIcon">⏳</div>
+    <div class="auth-title" id="pendingTitle">승인 대기중입니다</div>
+    <div class="auth-sub" id="pendingSub">총무(관리자)가 가입을 승인하면 이용하실 수 있습니다.</div>
+    <button class="btn outline block" onclick="doLogout()">로그아웃</button>
+  </div>
+</div>
+
+<!-- ============ MAIN APP ============ -->
+<div class="app hidden" id="mainApp">
+  <div class="letterhead">
+    <div class="letterhead-left">
+      <div class="brand-mark">總</div>
+      <div class="brand-text">
+        <h1><input class="org-input" id="orgName" value="전학공 총무장부" onblur="saveOrgName()"></h1>
+        <p>회비 · 지출 · 증빙 · 수요조사 · 일정 · 공지 통합 관리</p>
+      </div>
+    </div>
+    <div class="letterhead-right">
+      <div id="today"></div>
+      <div class="user-chip">
+        <span id="userNameChip"></span>
+        <span class="role-badge" id="userRoleBadge"></span>
+        <span class="logout-link" onclick="doLogout()">로그아웃</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="setup-note hidden" id="setupNote">
+    ⚙️ 파일 하단 <code>firebaseConfig</code>에 Firebase 프로젝트 정보를 입력하고, Authentication에서 이메일/비밀번호 로그인을 켜주세요.
+    또한 Firestore 보안 규칙을 반드시 적용해야 안전합니다 (하단 안내 참고).
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" onclick="showTab('dash')"><span class="tab-num">01</span>현황판</div>
+    <div class="tab" onclick="showTab('notice')"><span class="tab-num">02</span>공지사항</div>
+    <div class="tab" onclick="showTab('dues')"><span class="tab-num">03</span>회비 납부</div>
+    <div class="tab" onclick="showTab('expense')"><span class="tab-num">04</span>지출 · 증빙</div>
+    <div class="tab" onclick="showTab('survey')"><span class="tab-num">05</span>수요조사</div>
+    <div class="tab" onclick="showTab('calendar')"><span class="tab-num">06</span>일정</div>
+    <div class="tab" onclick="showTab('opinion')"><span class="tab-num">07</span>의견</div>
+    <div class="tab" onclick="showTab('chat')"><span class="tab-num">08</span>채팅<span class="tab-dot hidden" id="chatDot"></span></div>
+    <div class="tab" onclick="showTab('members')"><span class="tab-num">09</span>회비 대상자</div>
+    <div class="tab" onclick="showTab('timetable')"><span class="tab-num">10</span>시간표</div>
+    <div class="tab admin-only hidden" onclick="showTab('approval')"><span class="tab-num">11</span>회원 승인<span class="tab-dot hidden" id="pendingDot"></span></div>
+  </div>
+
+  <!-- 01 DASHBOARD -->
+  <div class="panel active" id="panel-dash">
+    <div class="summary-row">
+      <div class="sum-card"><div class="label">현재 잔액</div><div class="value green" id="dBalance">0원</div><div class="sub">납부총액 − 지출총액</div></div>
+      <div class="sum-card"><div class="label">이번 학기 납부율</div><div class="value" id="dRate">0%</div><div class="sub" id="dRateSub">0 / 0명</div></div>
+      <div class="sum-card"><div class="label">미납 인원</div><div class="value red" id="dUnpaid">0명</div><div class="sub">회비 납부 탭에서 확인</div></div>
+      <div class="sum-card"><div class="label">진행중 수요조사</div><div class="value" id="dSurvey">0건</div><div class="sub" id="dSurveySub">응답 대기중</div></div>
+    </div>
+    <div class="dash-two-col">
+      <div class="mini-card"><h3>📌 최근 공지사항</h3><div id="dNotices"></div></div>
+      <div class="mini-card"><h3>🗓️ 다가오는 일정</h3><div id="dEvents"></div></div>
+    </div>
+    <div class="sec-head"><h2>최근 지출 내역</h2></div>
+    <div class="ledger">
+      <table><thead><tr><th>날짜</th><th>항목</th><th>분류</th><th class="num">금액</th><th>증빙</th></tr></thead><tbody id="dRecentExpense"></tbody></table>
+    </div>
+  </div>
+
+  <!-- 02 NOTICE -->
+  <div class="panel" id="panel-notice">
+    <div class="sec-head">
+      <h2>공지사항</h2>
+      <button class="btn admin-only hidden" onclick="toggleForm('noticeForm')">+ 공지 작성</button>
+    </div>
+    <div class="form-card" id="noticeForm">
+      <div class="auth-field"><label>제목</label><input type="text" id="ntTitle" placeholder="공지 제목"></div>
+      <label style="font-size:11px;color:var(--ink-soft);">내용</label>
+      <textarea id="ntBody" rows="4" placeholder="공지 내용을 입력하세요" style="margin-bottom:10px;"></textarea>
+      <label class="chk" style="margin-bottom:12px;"><input type="checkbox" id="ntPinned"> 상단 고정</label>
+      <div class="form-actions">
+        <button class="btn outline" onclick="toggleForm('noticeForm')">취소</button>
+        <button class="btn" onclick="publishNotice()">게시</button>
+      </div>
+    </div>
+    <div id="noticeList"></div>
+  </div>
+
+  <!-- 03 DUES -->
+  <div class="panel" id="panel-dues">
+    <div class="sec-head">
+      <h2>회비 납부 현황</h2>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <select id="duesSemesterFilter" onchange="renderDues()" style="width:140px;"></select>
+        <button class="btn outline sm admin-only hidden" onclick="openDuesSetting()">학기 설정</button>
+      </div>
+    </div>
+    <div class="form-card" id="duesSettingForm">
+      <div class="form-grid" style="grid-template-columns:1fr 1fr 1fr;">
+        <div><label>학기 라벨 (예: 2026-2)</label><input type="text" id="newSemesterLabel" placeholder="2026-2"></div>
+        <div><label>1인당 회비</label><input type="number" id="newSemesterAmount" placeholder="30000"></div>
+        <div><label>&nbsp;</label><button class="btn" onclick="addSemester()">학기 추가</button></div>
+      </div>
+    </div>
+    <div class="ledger">
+      <table>
+        <thead><tr><th>성명</th><th>소속/과목</th><th class="num">회비</th><th>납부일</th><th>방법</th><th style="text-align:center;">상태</th></tr></thead>
+        <tbody id="duesBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 04 EXPENSE -->
+  <div class="panel" id="panel-expense">
+    <div class="sec-head">
+      <h2>지출 및 증빙서류</h2>
+      <button class="btn admin-only hidden" onclick="toggleForm('expenseForm')">+ 지출 등록</button>
+    </div>
+    <div class="form-card" id="expenseForm">
+      <div class="form-grid">
+        <div><label>날짜</label><input type="date" id="exDate"></div>
+        <div><label>분류</label>
+          <select id="exCategory">
+            <option>다과/회식</option><option>도서/자료구입</option><option>연수/교육</option>
+            <option>인쇄/사무용품</option><option>행사운영</option><option>기타</option>
+          </select>
+        </div>
+        <div><label>항목명</label><input type="text" id="exItem" placeholder="예: 세미나 다과비"></div>
+        <div><label>금액</label><input type="number" id="exAmount" placeholder="0"></div>
+      </div>
+      <div class="form-grid" style="grid-template-columns:2fr 1fr 1fr;">
+        <div><label>비고</label><input type="text" id="exNote" placeholder="선택 입력"></div>
+        <div><label>증빙 사진</label><input type="file" id="exReceipt" accept="image/*"></div>
+        <div style="display:flex;align-items:flex-end;"><span class="no-receipt" id="exReceiptStatus">첨부 없음</span></div>
+      </div>
+      <div class="form-actions">
+        <button class="btn outline" onclick="toggleForm('expenseForm')">취소</button>
+        <button class="btn" onclick="saveExpense()">저장</button>
+      </div>
+    </div>
+    <div class="summary-row" style="grid-template-columns:repeat(3,1fr);">
+      <div class="sum-card"><div class="label">총 납부액</div><div class="value green" id="exTotalIn">0원</div></div>
+      <div class="sum-card"><div class="label">총 지출액</div><div class="value red" id="exTotalOut">0원</div></div>
+      <div class="sum-card"><div class="label">잔액</div><div class="value" id="exBalance">0원</div></div>
+    </div>
+    <div class="ledger">
+      <table>
+        <thead><tr><th>날짜</th><th>분류</th><th>항목</th><th>비고</th><th class="num">금액</th><th>증빙</th><th class="admin-only hidden"></th></tr></thead>
+        <tbody id="expenseBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 05 SURVEY -->
+  <div class="panel" id="panel-survey">
+    <div class="sec-head">
+      <h2>선생님 요구사항 수요조사</h2>
+      <button class="btn admin-only hidden" onclick="toggleForm('surveyForm')">+ 새 수요조사 만들기</button>
+    </div>
+    <div class="form-card" id="surveyForm">
+      <div class="form-grid" style="grid-template-columns:2fr 1fr;">
+        <div><label>제목</label><input type="text" id="svTitle" placeholder="예: 2학기 전학공 연수 주제 수요조사"></div>
+        <div><label>마감일 (선택)</label><input type="date" id="svClose"></div>
+      </div>
+      <label style="font-size:11px;color:var(--ink-soft);">설명</label>
+      <textarea id="svDesc" rows="2" placeholder="조사 목적이나 안내 문구" style="margin-bottom:12px;"></textarea>
+      <div id="svQuestions"></div>
+      <button class="btn outline sm" onclick="addQuestionField()">+ 질문 추가</button>
+      <div class="form-actions" style="margin-top:14px;">
+        <button class="btn outline" onclick="toggleForm('surveyForm')">취소</button>
+        <button class="btn" onclick="publishSurvey()">수요조사 게시</button>
+      </div>
+    </div>
+    <div id="surveyList"></div>
+  </div>
+
+  <!-- 06 CALENDAR -->
+  <div class="panel" id="panel-calendar">
+    <div class="sec-head">
+      <h2>전학공 일정</h2>
+      <button class="btn admin-only hidden" onclick="toggleForm('eventForm')">+ 일정 등록</button>
+    </div>
+    <div class="form-card" id="eventForm">
+      <div class="form-grid">
+        <div><label>날짜</label><input type="date" id="evDate"></div>
+        <div><label>시간 (선택)</label><input type="time" id="evTime"></div>
+        <div><label>제목</label><input type="text" id="evTitle" placeholder="예: 2학기 전학공 정기모임"></div>
+        <div><label>장소</label><input type="text" id="evLocation" placeholder="예: 상업과 준비실"></div>
+      </div>
+      <label style="font-size:11px;color:var(--ink-soft);">설명</label>
+      <textarea id="evDesc" rows="2" placeholder="선택 입력" style="margin-bottom:10px;"></textarea>
+      <div class="form-actions">
+        <button class="btn outline" onclick="toggleForm('eventForm')">취소</button>
+        <button class="btn" onclick="saveEvent()">등록</button>
+      </div>
+    </div>
+    <div class="cal-card">
+      <div class="cal-head">
+        <div class="cal-nav"><button onclick="changeMonth(-1)">‹</button></div>
+        <div class="cal-label" id="calLabel"></div>
+        <div class="cal-nav"><button onclick="changeMonth(1)">›</button></div>
+      </div>
+      <div class="cal-grid" id="calGrid"></div>
+    </div>
+    <div class="sec-head">
+      <h2 id="eventListTitle">다가오는 일정</h2>
+      <button class="btn outline sm" onclick="clearDateFilter()" id="clearFilterBtn" style="display:none;">전체 보기</button>
+    </div>
+    <div id="eventList"></div>
+  </div>
+
+  <!-- 07 OPINION -->
+  <div class="panel" id="panel-opinion">
+    <div class="sec-head"><h2>의견 나누기</h2></div>
+    <div class="form-card open" style="margin-bottom:18px;">
+      <textarea id="opText" rows="3" placeholder="전학공 운영, 회비 사용, 행사 등에 대한 의견을 자유롭게 남겨주세요."></textarea>
+      <div class="form-actions" style="margin-top:10px;"><button class="btn gold" onclick="submitOpinion()">의견 등록</button></div>
+    </div>
+    <div id="opinionList"></div>
+  </div>
+
+  <!-- 08 CHAT -->
+  <div class="panel" id="panel-chat">
+    <div class="sec-head"><h2>채팅</h2></div>
+    <div class="tt-subtabs">
+      <div class="tt-subtab" data-cview="group" onclick="switchChatView('group')">단체 채팅</div>
+      <div class="tt-subtab" data-cview="dm" onclick="switchChatView('dm')">1:1 채팅</div>
+    </div>
+
+    <div id="chat-group">
+      <div class="chat-frame">
+        <div class="chat-messages" id="groupChatMessages"></div>
+        <div class="chat-input-row">
+          <input type="text" id="groupChatInput" placeholder="상업과 선생님들께 메시지 보내기" onkeydown="if(event.key==='Enter') sendGroupMsg()">
+          <button class="btn sm" onclick="sendGroupMsg()">전송</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="chat-dm" class="hidden">
+      <div class="dm-wrap">
+        <div class="dm-list" id="dmList"></div>
+        <div class="dm-thread">
+          <div class="dm-thread-head" id="dmThreadHead">왼쪽에서 대화 상대를 선택하세요</div>
+          <div class="chat-messages" id="dmMessages"></div>
+          <div class="chat-input-row">
+            <input type="text" id="dmInput" placeholder="메시지 입력" onkeydown="if(event.key==='Enter') sendDM()" disabled>
+            <button class="btn sm" onclick="sendDM()" id="dmSendBtn" disabled>전송</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 09 MEMBERS -->
+  <div class="panel" id="panel-members">
+    <div class="sec-head">
+      <h2>회비 대상자 명단</h2>
+      <button class="btn admin-only hidden" onclick="toggleForm('memberForm')">+ 대상자 추가</button>
+    </div>
+    <div class="setup-note">이 명단은 회비·납부 관리를 위한 대상자 목록입니다. 로그인 계정과는 별도이며, 계정이 없는 선생님도 추가할 수 있습니다.</div>
+    <div class="form-card" id="memberForm">
+      <div class="form-grid" style="grid-template-columns:1fr 1fr 1fr;">
+        <div><label>성명</label><input type="text" id="mName"></div>
+        <div><label>소속/과목</label><input type="text" id="mDept" placeholder="예: 상업과·회계"></div>
+        <div><label>&nbsp;</label><button class="btn" onclick="saveMember()">추가</button></div>
+      </div>
+    </div>
+    <div class="ledger">
+      <table><thead><tr><th>성명</th><th>소속/과목</th><th class="admin-only hidden"></th></tr></thead><tbody id="memberBody"></tbody></table>
+    </div>
+  </div>
+
+  <!-- 10 TIMETABLE -->
+  <div class="panel" id="panel-timetable">
+    <div class="sec-head">
+      <h2>선생님 시간표</h2>
+      <button class="btn outline sm admin-only hidden" onclick="openTTSetting()">교시 설정</button>
+    </div>
+    <div class="form-card" id="ttSettingForm">
+      <div class="form-grid" style="grid-template-columns:1fr 1fr;">
+        <div><label>교시 수 (전체 공통)</label><input type="number" id="newTTPeriods" placeholder="7" min="1" max="12"></div>
+        <div style="display:flex;align-items:flex-end;"><button class="btn" onclick="saveTTPeriods()">저장</button></div>
+      </div>
+    </div>
+    <div class="tt-subtabs">
+      <div class="tt-subtab" data-view="mine" onclick="switchTTView('mine')">내 시간표 편집</div>
+      <div class="tt-subtab" data-view="compare" onclick="switchTTView('compare')">전체 한눈에 보기</div>
+    </div>
+
+    <div id="tt-mine">
+      <div class="setup-note">본인 시간표를 입력하고 저장하면 '전체 한눈에 보기'에서 다른 선생님들과 나란히 비교할 수 있습니다. 공강 시간은 비워두세요.</div>
+      <div class="ledger" style="overflow-x:auto;padding:14px;" id="ttMineGrid"></div>
+      <div class="form-actions" style="margin-top:12px;"><button class="btn gold" onclick="saveMyTimetable()">내 시간표 저장</button></div>
+    </div>
+
+    <div id="tt-compare" class="hidden">
+      <div class="setup-note">요일을 선택하면 그 요일 교시별로 모든 선생님의 시간표를 한 번에 비교할 수 있습니다. 시간표를 교체할 상대를 찾을 때 활용하세요.</div>
+      <div class="tt-day-tabs" id="ttDayTabs"></div>
+      <div class="ledger" style="overflow-x:auto;padding:14px;" id="ttCompareTable"></div>
+    </div>
+  </div>
+
+  <!-- 11 APPROVAL (admin only) -->
+  <div class="panel" id="panel-approval">
+    <div class="sec-head"><h2>가입 승인 대기</h2></div>
+    <div id="pendingList"></div>
+    <div class="sec-head"><h2>전체 계정 · 권한 관리</h2></div>
+    <div id="allUserList"></div>
+  </div>
+</div>
+
+<div class="modal-bg" id="imgModalBg" onclick="closeImgModal(event)">
+  <div class="modal"><img id="imgModalSrc" src=""></div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* =====================================================================
+   FIREBASE SETUP — 본인의 Firebase 프로젝트 정보로 교체하세요.
+   1) Firebase 콘솔 > Authentication > Sign-in method > 이메일/비밀번호 사용 설정
+   2) Firestore Database 생성
+   3) 이 파일과 함께 제공되는 firestore.rules 내용을 Firestore > 규칙 탭에 그대로 붙여넣기
+      (규칙을 적용하지 않으면 승인되지 않은 사람도 데이터에 접근할 수 있어 위험합니다)
+   4) 최초 총무(관리자) 부트스트랩:
+      - 배포 후 본인 계정으로 가장 먼저 회원가입 → 이메일 인증
+      - Firestore 콘솔에서 junhakgong_chongmu/data/users/{내 uid} 문서를 열어
+        role 값을 "admin", status 값을 "approved" 로 직접 수정
+      - 보안 규칙상 클라이언트(웹페이지)에서는 스스로 총무 권한을 부여할 수 없습니다.
+   5) (선택) 특정 학교 이메일만 가입 가능하게 하려면 ALLOWED_EMAIL_DOMAIN 값을 설정하고,
+      firestore.rules 의 이메일 도메인 검증 주석도 함께 활성화하세요.
+===================================================================== */
+const firebaseConfig = {
+  apiKey: "AIzaSyBtjjq3BPhb5yKRmCZzUzp2O9TB1EDMVys",
+  authDomain: "accountingteacher.firebaseapp.com",
+  projectId: "accountingteacher",
+  storageBucket: "accountingteacher.firebasestorage.app",
+  messagingSenderId: "906019087676",
+  appId: "1:906019087676:web:7eff770883e63c20876a39",
+  measurementId: "G-26R1YNX7JY"
+};
+const ALLOWED_EMAIL_DOMAIN = ""; // 예: "hanil.hs.kr" 처럼 설정하면 해당 도메인 이메일만 가입 안내 (실질 차단은 firestore.rules에서)
+
+let db = null, auth = null, firebaseReady = false;
+try{
+  firebase.initializeApp(firebaseConfig);
+  db = firebase.firestore();
+  auth = firebase.auth();
+  firebaseReady = true;
+}catch(e){ console.warn("Firebase 초기화 대기중:", e); }
+
+const COL = "junhakgong_chongmu";
+let currentUser = null;
+let isAdmin = false;
+let state = { members:[], dues:[], expenses:[], surveys:[], responses:[], opinions:[], notices:[], events:[], timetables:[], ttPeriods:7, semesters:[], orgName:"전학공 총무장부", allUsers:[], groupMessages:[], dmThreads:[], dmMessages:[] };
+let draftReceiptBase64 = null;
+let draftQuestions = [];
+let calYear = new Date().getFullYear(), calMonth = new Date().getMonth();
+let selectedDate = null;
+const TT_DAYS = ['월','화','수','목','금'];
+let ttView = 'mine';
+let ttSelectedDay = '월';
+let chatView = 'group';
+let dmActiveUid = null;
+let dmMessagesUnsub = null;
+
+/* ---------- helpers ---------- */
+function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2200); }
+function won(n){ return (Number(n)||0).toLocaleString('ko-KR') + "원"; }
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+function todayStr(){ return new Date().toISOString().slice(0,10); }
+function esc(s){ return String(s??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function escAttr(s){ return esc(s).replace(/"/g,'&quot;'); }
+document.getElementById('today').textContent = new Date().toLocaleDateString('ko-KR', { year:'numeric', month:'long', day:'numeric', weekday:'long' });
+document.getElementById('exDate').value = todayStr();
+document.getElementById('evDate').value = todayStr();
+if(ALLOWED_EMAIL_DOMAIN){ document.getElementById('domainHint').textContent = `※ @${ALLOWED_EMAIL_DOMAIN} 이메일로만 가입할 수 있습니다.`; }
+
+function showMsg(id, text, ok){ const el=document.getElementById(id); el.textContent=text; el.className='auth-msg show '+(ok?'ok':'err'); }
+
+/* ================= AUTH SCREENS SWITCH ================= */
+function showScreen(name){
+  ['login','signup','reset','verify','pending'].forEach(s=> document.getElementById(s+'Screen').classList.add('hidden'));
+  document.getElementById(name+'Screen').classList.remove('hidden');
+  document.getElementById('mainApp').classList.add('hidden');
+}
+
+/* ================= SIGNUP / LOGIN / RESET / LOGOUT ================= */
+function doSignup(){
+  if(!firebaseReady){ toast("Firebase 설정이 필요합니다."); return; }
+  const name = document.getElementById('suName').value.trim();
+  const dept = document.getElementById('suDept').value.trim();
+  const email = document.getElementById('suEmail').value.trim();
+  const pw = document.getElementById('suPw').value;
+  if(!name || !email || pw.length < 6){ showMsg('signupMsg','성명, 이메일을 입력하고 비밀번호는 6자 이상으로 설정해주세요.', false); return; }
+  if(ALLOWED_EMAIL_DOMAIN && !email.toLowerCase().endsWith('@'+ALLOWED_EMAIL_DOMAIN.toLowerCase())){
+    showMsg('signupMsg', `@${ALLOWED_EMAIL_DOMAIN} 이메일로만 가입할 수 있습니다.`, false); return;
+  }
+  auth.createUserWithEmailAndPassword(email, pw).then(async cred=>{
+    // 보안규칙(firestore.rules)이 role='member', status='pending' 이외의 값으로는 생성을 거부합니다.
+    await db.collection(COL).doc('data').collection('users').doc(cred.user.uid).set({
+      name, dept, email, role:'member', status:'pending', createdAt: new Date().toISOString()
+    });
+    await cred.user.sendEmailVerification();
+    showMsg('signupMsg', '가입 신청이 완료되었습니다. 인증 이메일을 보냈으니 확인 후, 총무 승인을 기다려주세요.', true);
+    await auth.signOut();
+    setTimeout(()=>showScreen('login'), 2000);
+  }).catch(err=>{ showMsg('signupMsg', translateAuthError(err), false); });
+}
+function doLogin(){
+  if(!firebaseReady){ toast("Firebase 설정이 필요합니다."); return; }
+  const email = document.getElementById('loginEmail').value.trim();
+  const pw = document.getElementById('loginPw').value;
+  if(!email || !pw){ showMsg('loginMsg','이메일과 비밀번호를 입력하세요.', false); return; }
+  auth.signInWithEmailAndPassword(email, pw).catch(err=>{ showMsg('loginMsg', translateAuthError(err), false); });
+}
+function doReset(){
+  if(!firebaseReady){ toast("Firebase 설정이 필요합니다."); return; }
+  const email = document.getElementById('resetEmail').value.trim();
+  if(!email){ showMsg('resetMsg','이메일을 입력하세요.', false); return; }
+  auth.sendPasswordResetEmail(email).then(()=>{ showMsg('resetMsg','재설정 메일을 보냈습니다. 메일함을 확인해주세요.', true); })
+    .catch(err=>{ showMsg('resetMsg', translateAuthError(err), false); });
+}
+function doLogout(){ if(firebaseReady) auth.signOut(); currentUser=null; isAdmin=false; showScreen('login'); }
+function resendVerification(){
+  if(auth.currentUser){ auth.currentUser.sendEmailVerification().then(()=>toast("인증 메일을 재발송했습니다.")); }
+}
+function checkVerified(){
+  if(!auth.currentUser) return;
+  auth.currentUser.reload().then(()=>{
+    if(auth.currentUser.emailVerified){ handleAuthUser(auth.currentUser); }
+    else{ toast("아직 인증되지 않았습니다. 메일함(스팸함 포함)을 확인해주세요."); }
+  });
+}
+function translateAuthError(err){
+  const map = {
+    'auth/email-already-in-use':'이미 가입된 이메일입니다.',
+    'auth/invalid-email':'올바르지 않은 이메일 형식입니다.',
+    'auth/weak-password':'비밀번호가 너무 약합니다 (6자 이상).',
+    'auth/user-not-found':'가입되지 않은 이메일입니다.',
+    'auth/wrong-password':'비밀번호가 일치하지 않습니다.',
+    'auth/invalid-credential':'이메일 또는 비밀번호가 일치하지 않습니다.',
+    'auth/too-many-requests':'시도 횟수가 많습니다. 잠시 후 다시 시도해주세요.'
+  };
+  return map[err.code] || ('오류: ' + err.message);
+}
+
+/* ================= AUTH STATE ================= */
+function handleAuthUser(user){
+  if(!user.emailVerified){
+    document.getElementById('verifyEmailText').textContent = `${user.email} 로 인증 메일을 보냈습니다. 메일함에서 인증 후 아래 버튼을 눌러주세요.`;
+    showScreen('verify');
+    return;
+  }
+  db.collection(COL).doc('data').collection('users').doc(user.uid).get().then(doc=>{
+    if(!doc.exists){ doLogout(); return; }
+    const data = doc.data();
+    currentUser = { uid:user.uid, ...data };
+    if(data.status === 'approved'){
+      isAdmin = data.role === 'admin';
+      enterApp();
+    } else {
+      document.getElementById('pendingIcon').textContent = data.status==='rejected' ? '✕' : '⏳';
+      document.getElementById('pendingTitle').textContent = data.status==='rejected' ? '가입이 반려되었습니다' : '승인 대기중입니다';
+      document.getElementById('pendingSub').textContent = data.status==='rejected'
+        ? '문의사항은 총무(관리자)에게 직접 연락해주세요.'
+        : `${data.name}님, 이메일 인증이 완료되었습니다. 총무(관리자)가 가입을 승인하면 이용하실 수 있습니다.`;
+      showScreen('pending');
+    }
+  });
+}
+if(firebaseReady){
+  auth.onAuthStateChanged(user=>{ if(!user){ showScreen('login'); return; } handleAuthUser(user); });
+} else {
+  document.getElementById('setupNote').classList.remove('hidden');
+}
+
+function enterApp(){
+  ['loginScreen','signupScreen','resetScreen','verifyScreen','pendingScreen'].forEach(s=>document.getElementById(s).classList.add('hidden'));
+  document.getElementById('mainApp').classList.remove('hidden');
+  document.getElementById('userNameChip').textContent = currentUser.name + (currentUser.dept ? ' · '+currentUser.dept : '');
+  const rb = document.getElementById('userRoleBadge');
+  rb.textContent = isAdmin ? '총무' : '회원';
+  rb.className = 'role-badge ' + (isAdmin ? 'admin' : 'member');
+  document.querySelectorAll('.admin-only').forEach(el=> el.classList.toggle('hidden', !isAdmin));
+  initSync();
+}
+
+/* ---------- tabs ---------- */
+function showTab(name){
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('panel-'+name).classList.add('active');
+  event.currentTarget.classList.add('active');
+  if(name==='calendar') renderCalendar();
+  if(name==='timetable') renderTimetable();
+  if(name==='chat') { renderChat(); scrollGroupChatToBottom(); }
+}
+function toggleForm(id){ document.getElementById(id).classList.toggle('open'); }
+
+function saveOrgName(){
+  const v = document.getElementById('orgName').value.trim() || "전학공 총무장부";
+  state.orgName = v;
+  if(firebaseReady) db.collection(COL).doc('settings').set({orgName:v}, {merge:true});
+}
+
+/* ================= FIRESTORE SYNC ================= */
+function initSync(){
+  db.collection(COL).doc('settings').onSnapshot(doc=>{
+    if(doc.exists){
+      const d = doc.data();
+      if(d.orgName){ state.orgName = d.orgName; document.getElementById('orgName').value = d.orgName; }
+      state.semesters = d.semesters || [];
+      state.ttPeriods = d.ttPeriods || 7;
+      renderSemesterOptions();
+      if(document.getElementById('panel-timetable').classList.contains('active')) renderTimetable();
+    }
+  });
+  db.collection(COL).doc('data').collection('timetables').onSnapshot(snap=>{
+    state.timetables = snap.docs.map(d=>({uid:d.id, ...d.data()}));
+    if(document.getElementById('panel-timetable').classList.contains('active')) renderTimetable();
+  });
+  db.collection(COL).doc('data').collection('members').onSnapshot(snap=>{ state.members = snap.docs.map(d=>({id:d.id, ...d.data()})); renderAll(); });
+  db.collection(COL).doc('data').collection('dues').onSnapshot(snap=>{ state.dues = snap.docs.map(d=>({id:d.id, ...d.data()})); renderAll(); });
+  db.collection(COL).doc('data').collection('expenses').onSnapshot(snap=>{
+    state.expenses = snap.docs.map(d=>({id:d.id, ...d.data()})).sort((a,b)=> (b.date||"").localeCompare(a.date||""));
+    renderAll();
+  });
+  db.collection(COL).doc('data').collection('surveys').onSnapshot(snap=>{
+    state.surveys = snap.docs.map(d=>({id:d.id, ...d.data()})).sort((a,b)=> (b.createdAt||"").localeCompare(a.createdAt||""));
+    renderAll();
+  });
+  db.collection(COL).doc('data').collection('responses').onSnapshot(snap=>{ state.responses = snap.docs.map(d=>({id:d.id, ...d.data()})); renderAll(); });
+  db.collection(COL).doc('data').collection('opinions').onSnapshot(snap=>{
+    state.opinions = snap.docs.map(d=>({id:d.id, ...d.data()})).sort((a,b)=> (b.createdAt||"").localeCompare(a.createdAt||""));
+    renderAll();
+  });
+  db.collection(COL).doc('data').collection('notices').onSnapshot(snap=>{
+    state.notices = snap.docs.map(d=>({id:d.id, ...d.data()})).sort((a,b)=>{
+      if(!!b.pinned !== !!a.pinned) return (b.pinned?1:0)-(a.pinned?1:0);
+      return (b.createdAt||"").localeCompare(a.createdAt||"");
+    });
+    renderAll();
+  });
+  db.collection(COL).doc('data').collection('events').onSnapshot(snap=>{
+    state.events = snap.docs.map(d=>({id:d.id, ...d.data()})).sort((a,b)=> (a.date||"").localeCompare(b.date||""));
+    renderAll();
+    if(document.getElementById('panel-calendar').classList.contains('active')) renderCalendar();
+  });
+  db.collection(COL).doc('data').collection('users').onSnapshot(snap=>{
+    state.allUsers = snap.docs.map(d=>({uid:d.id, ...d.data()}));
+    const pending = state.allUsers.filter(u=>u.status==='pending').length;
+    document.getElementById('pendingDot').classList.toggle('hidden', pending===0);
+    if(isAdmin) renderApproval();
+    renderDMList();
+  });
+  db.collection(COL).doc('data').collection('groupMessages').orderBy('createdAt','asc').onSnapshot(snap=>{
+    const wasNearBottom = isGroupChatNearBottom();
+    state.groupMessages = snap.docs.map(d=>({id:d.id, ...d.data()}));
+    renderGroupChat();
+    if(wasNearBottom) scrollGroupChatToBottom();
+  });
+  db.collection(COL).doc('data').collection('dmThreads').where('participants','array-contains', currentUser.uid).onSnapshot(snap=>{
+    state.dmThreads = snap.docs.map(d=>({id:d.id, ...d.data()})).sort((a,b)=> (b.lastAt||"").localeCompare(a.lastAt||""));
+    renderDMList();
+  });
+}
+
+/* ================= NOTICES ================= */
+function publishNotice(){
+  const title = document.getElementById('ntTitle').value.trim();
+  const body = document.getElementById('ntBody').value.trim();
+  const pinned = document.getElementById('ntPinned').checked;
+  if(!title || !body){ toast("제목과 내용을 입력하세요."); return; }
+  db.collection(COL).doc('data').collection('notices').add({ title, body, pinned, authorName: currentUser.name, createdAt: new Date().toISOString() });
+  document.getElementById('ntTitle').value=''; document.getElementById('ntBody').value=''; document.getElementById('ntPinned').checked=false;
+  toggleForm('noticeForm');
+  toast("공지사항이 게시되었습니다.");
+}
+function togglePinNotice(id, current){
+  db.collection(COL).doc('data').collection('notices').doc(id).set({pinned: !current}, {merge:true});
+}
+function deleteNotice(id){
+  if(!confirm("이 공지를 삭제할까요?")) return;
+  db.collection(COL).doc('data').collection('notices').doc(id).delete();
+}
+function renderNotices(){
+  const wrap = document.getElementById('noticeList');
+  if(state.notices.length===0){
+    wrap.innerHTML = `<div class="empty"><b>등록된 공지사항이 없습니다</b>총무가 공지를 작성하면 이곳에 표시됩니다.</div>`;
+  } else {
+    wrap.innerHTML = state.notices.map(n=>`
+      <div class="notice-card ${n.pinned?'pinned':''}">
+        <div class="notice-top">
+          <div>
+            <div class="notice-title">${n.pinned?'<span class="badge pin">고정</span> ':''}${esc(n.title)}</div>
+            <div class="notice-meta">${esc(n.authorName)} · ${n.createdAt ? new Date(n.createdAt).toLocaleDateString('ko-KR',{month:'2-digit',day:'2-digit'}) : ''}</div>
+          </div>
+        </div>
+        <div class="notice-body">${esc(n.body)}</div>
+        <div class="notice-actions admin-only ${isAdmin?'':'hidden'}">
+          <button class="btn outline sm" onclick="togglePinNotice('${n.id}', ${!!n.pinned})">${n.pinned?'고정 해제':'상단 고정'}</button>
+          <button class="btn red sm" onclick="deleteNotice('${n.id}')">삭제</button>
+        </div>
+      </div>
+    `).join('');
+  }
+  const dWrap = document.getElementById('dNotices');
+  const top3 = state.notices.slice(0,3);
+  dWrap.innerHTML = top3.length===0 ? `<div class="empty sm">공지사항이 없습니다</div>` :
+    top3.map(n=>`<div class="mini-item"><span class="mi-title">${n.pinned?'📌 ':''}${esc(n.title)}</span><span class="mi-sub">${n.createdAt?new Date(n.createdAt).toLocaleDateString('ko-KR',{month:'2-digit',day:'2-digit'}):''}</span></div>`).join('');
+}
+
+/* ================= CALENDAR / EVENTS ================= */
+function changeMonth(delta){
+  calMonth += delta;
+  if(calMonth<0){ calMonth=11; calYear--; }
+  if(calMonth>11){ calMonth=0; calYear++; }
+  renderCalendar();
+}
+function selectDate(dateStr){
+  selectedDate = (selectedDate===dateStr) ? null : dateStr;
+  document.getElementById('evDate').value = selectedDate || todayStr();
+  renderCalendar();
+}
+function clearDateFilter(){ selectedDate = null; renderCalendar(); }
+function saveEvent(){
+  const date = document.getElementById('evDate').value;
+  const time = document.getElementById('evTime').value;
+  const title = document.getElementById('evTitle').value.trim();
+  const location = document.getElementById('evLocation').value.trim();
+  const desc = document.getElementById('evDesc').value.trim();
+  if(!date || !title){ toast("날짜와 제목을 입력하세요."); return; }
+  db.collection(COL).doc('data').collection('events').add({ date, time, title, location, desc, createdBy: currentUser.name, createdAt:new Date().toISOString() });
+  document.getElementById('evTitle').value=''; document.getElementById('evLocation').value=''; document.getElementById('evDesc').value=''; document.getElementById('evTime').value='';
+  toggleForm('eventForm');
+  toast("일정이 등록되었습니다.");
+}
+function deleteEvent(id){
+  if(!confirm("이 일정을 삭제할까요?")) return;
+  db.collection(COL).doc('data').collection('events').doc(id).delete();
+}
+function renderCalendar(){
+  const grid = document.getElementById('calGrid');
+  document.getElementById('calLabel').textContent = `${calYear}년 ${calMonth+1}월`;
+  const firstDay = new Date(calYear, calMonth, 1).getDay();
+  const daysInMonth = new Date(calYear, calMonth+1, 0).getDate();
+  const todayVal = todayStr();
+  const weekdayNames = ['일','월','화','수','목','금','토'];
+  let html = weekdayNames.map(w=>`<div class="cal-weekday">${w}</div>`).join('');
+  for(let i=0;i<firstDay;i++) html += `<div class="cal-day other-month"><span class="cal-daynum">·</span></div>`;
+  for(let d=1; d<=daysInMonth; d++){
+    const dateStr = `${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const hasEvent = state.events.some(e=>e.date===dateStr);
+    const isToday = dateStr===todayVal;
+    const isSel = dateStr===selectedDate;
+    html += `<div class="cal-day ${hasEvent?'has-event':''} ${isToday?'today':''} ${isSel?'selected':''}" ${hasEvent?`onclick="selectDate('${dateStr}')"`:''}>
+      <span class="cal-daynum">${d}</span>${hasEvent?'<span class="cal-dot"></span>':''}
+    </div>`;
+  }
+  grid.innerHTML = html;
+  renderEventList();
+}
+function renderEventList(){
+  const wrap = document.getElementById('eventList');
+  const titleEl = document.getElementById('eventListTitle');
+  const clearBtn = document.getElementById('clearFilterBtn');
+  let list;
+  if(selectedDate){
+    list = state.events.filter(e=>e.date===selectedDate);
+    titleEl.textContent = `${selectedDate} 일정`;
+    clearBtn.style.display = '';
+  } else {
+    list = state.events.filter(e=>e.date >= todayStr());
+    titleEl.textContent = '다가오는 일정';
+    clearBtn.style.display = 'none';
+  }
+  wrap.innerHTML = list.length===0 ? `<div class="empty sm"><b>일정이 없습니다</b>${isAdmin?'총무 모드에서 일정을 등록해보세요.':''}</div>` :
+    list.map(e=>`
+      <div class="event-card">
+        <div class="event-date-chip">${esc(e.date)}${e.time?' '+esc(e.time):''}</div>
+        <div class="event-info" style="flex:1;">
+          <b>${esc(e.title)}</b>
+          <div>${e.location?esc(e.location)+' · ':''}${esc(e.desc||'')}</div>
+        </div>
+        <span class="admin-only ${isAdmin?'':'hidden'}"><span class="link-x" onclick="deleteEvent('${e.id}')">삭제</span></span>
+      </div>
+    `).join('');
+
+  const dWrap = document.getElementById('dEvents');
+  const upcoming = state.events.filter(e=>e.date >= todayStr()).slice(0,3);
+  dWrap.innerHTML = upcoming.length===0 ? `<div class="empty sm">예정된 일정이 없습니다</div>` :
+    upcoming.map(e=>`<div class="mini-item"><span class="mi-title">${esc(e.title)}</span><span class="mi-sub">${esc(e.date)}</span></div>`).join('');
+}
+
+/* ================= APPROVAL (admin only) ================= */
+function approveUser(uid){ db.collection(COL).doc('data').collection('users').doc(uid).set({status:'approved'}, {merge:true}); toast("가입을 승인했습니다."); }
+function rejectUser(uid){
+  if(!confirm("이 가입 신청을 반려할까요?")) return;
+  db.collection(COL).doc('data').collection('users').doc(uid).set({status:'rejected'}, {merge:true});
+  toast("가입을 반려했습니다.");
+}
+function toggleRole(uid, current){
+  if(uid === currentUser.uid){ toast("본인의 권한은 변경할 수 없습니다."); return; }
+  const newRole = current==='admin' ? 'member' : 'admin';
+  if(!confirm(newRole==='admin' ? "이 계정에 총무(관리자) 권한을 부여할까요?" : "이 계정의 총무 권한을 회수할까요?")) return;
+  db.collection(COL).doc('data').collection('users').doc(uid).set({role:newRole}, {merge:true});
+}
+function renderApproval(){
+  const pendingWrap = document.getElementById('pendingList');
+  const pending = state.allUsers.filter(u=>u.status==='pending');
+  pendingWrap.innerHTML = pending.length===0 ? `<div class="empty sm">대기중인 가입 신청이 없습니다.</div>` :
+    pending.map(u=>`
+      <div class="approval-card">
+        <div class="approval-info"><b>${esc(u.name)}</b><div>${esc(u.dept||'-')} · ${esc(u.email)}</div></div>
+        <div style="display:flex;gap:6px;">
+          <button class="btn green sm" onclick="approveUser('${u.uid}')">승인</button>
+          <button class="btn red sm" onclick="rejectUser('${u.uid}')">반려</button>
+        </div>
+      </div>
+    `).join('');
+  const allWrap = document.getElementById('allUserList');
+  const approved = state.allUsers.filter(u=>u.status==='approved');
+  allWrap.innerHTML = approved.length===0 ? `<div class="empty sm">승인된 계정이 없습니다.</div>` :
+    approved.map(u=>`
+      <div class="approval-card">
+        <div class="approval-info"><b>${esc(u.name)} ${u.uid===currentUser.uid?'<span class="muted" style="font-weight:400;font-size:11px;">(나)</span>':''}</b><div>${esc(u.dept||'-')} · ${esc(u.email)}</div></div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <span class="role-badge ${u.role==='admin'?'admin':'member'}">${u.role==='admin'?'총무':'회원'}</span>
+          <button class="btn outline sm" onclick="toggleRole('${u.uid}','${u.role}')" ${u.uid===currentUser.uid?'disabled':''}>${u.role==='admin'?'권한 회수':'총무 지정'}</button>
+        </div>
+      </div>
+    `).join('');
+}
+
+/* ================= OPINIONS ================= */
+function submitOpinion(){
+  const text = document.getElementById('opText').value.trim();
+  if(!text){ toast("의견 내용을 입력해주세요."); return; }
+  db.collection(COL).doc('data').collection('opinions').add({ authorUid:currentUser.uid, authorName:currentUser.name, text, createdAt:new Date().toISOString() });
+  document.getElementById('opText').value = '';
+  toast("의견이 등록되었습니다.");
+}
+function deleteOpinion(id, authorUid){
+  if(!isAdmin && authorUid !== currentUser.uid){ toast("본인 의견만 삭제할 수 있습니다."); return; }
+  if(!confirm("이 의견을 삭제할까요?")) return;
+  db.collection(COL).doc('data').collection('opinions').doc(id).delete();
+}
+function renderOpinions(){
+  const wrap = document.getElementById('opinionList');
+  if(state.opinions.length===0){ wrap.innerHTML = `<div class="empty"><b>등록된 의견이 없습니다</b>전학공 운영에 대한 의견을 자유롭게 남겨주세요.</div>`; return; }
+  wrap.innerHTML = state.opinions.map(o=>`
+    <div class="opinion-card">
+      <div class="opinion-top">
+        <span class="opinion-author">${esc(o.authorName)}</span>
+        <span class="opinion-date">${o.createdAt ? new Date(o.createdAt).toLocaleString('ko-KR', {month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) : ''}</span>
+      </div>
+      <div class="opinion-text">${esc(o.text)}</div>
+      ${(isAdmin || o.authorUid===currentUser.uid) ? `<div class="opinion-actions"><span class="link-x" onclick="deleteOpinion('${o.id}','${o.authorUid}')">삭제</span></div>` : ''}
+    </div>
+  `).join('');
+}
+
+/* ================= MEMBERS ================= */
+function saveMember(){
+  const name = document.getElementById('mName').value.trim();
+  const dept = document.getElementById('mDept').value.trim();
+  if(!name){ toast("성명을 입력하세요."); return; }
+  db.collection(COL).doc('data').collection('members').add({ name, dept });
+  document.getElementById('mName').value=''; document.getElementById('mDept').value='';
+  toggleForm('memberForm');
+  toast("대상자가 추가되었습니다.");
+}
+function deleteMember(id){
+  if(!confirm("이 대상자를 삭제할까요? 관련 회비 기록은 유지됩니다.")) return;
+  db.collection(COL).doc('data').collection('members').doc(id).delete();
+}
+function renderMembers(){
+  const body = document.getElementById('memberBody');
+  if(state.members.length === 0){ body.innerHTML = `<tr><td colspan="3"><div class="empty"><b>등록된 대상자가 없습니다</b>총무가 회비 대상자를 먼저 등록해주세요.</div></td></tr>`; return; }
+  body.innerHTML = state.members.map(m=>`
+    <tr>
+      <td>${esc(m.name)}</td>
+      <td class="muted">${esc(m.dept||'-')}</td>
+      <td class="admin-only ${isAdmin?'':'hidden'}" style="text-align:right;"><span class="link-x" onclick="deleteMember('${m.id}')">삭제</span></td>
+    </tr>
+  `).join('');
+}
+
+/* ================= SEMESTERS / DUES ================= */
+function openDuesSetting(){ toggleForm('duesSettingForm'); }
+function addSemester(){
+  const label = document.getElementById('newSemesterLabel').value.trim();
+  const amount = Number(document.getElementById('newSemesterAmount').value);
+  if(!label || !amount){ toast("학기 라벨과 금액을 입력하세요."); return; }
+  const sems = [...state.semesters, {label, amount}];
+  db.collection(COL).doc('settings').set({semesters:sems}, {merge:true});
+  document.getElementById('newSemesterLabel').value=''; document.getElementById('newSemesterAmount').value='';
+  toast(`'${label}' 학기가 추가되었습니다. (1인당 ${won(amount)})`);
+}
+function renderSemesterOptions(){
+  const sel = document.getElementById('duesSemesterFilter');
+  if(state.semesters.length===0){ sel.innerHTML = `<option value="">학기를 먼저 설정하세요</option>`; renderDues(); return; }
+  const prev = sel.value;
+  sel.innerHTML = state.semesters.map(s=>`<option value="${s.label}">${s.label} (1인 ${won(s.amount)})</option>`).join('');
+  if(prev && state.semesters.some(s=>s.label===prev)) sel.value = prev;
+  renderDues();
+}
+function getDue(memberId, semester){ return state.dues.find(d=> d.memberId===memberId && d.semester===semester); }
+function toggleDuePaid(memberId, semester, amount){
+  if(!isAdmin){ toast("총무만 상태를 변경할 수 있습니다."); return; }
+  const existing = getDue(memberId, semester);
+  if(existing && existing.paid){ db.collection(COL).doc('data').collection('dues').doc(existing.id).set({paid:false, paidDate:null}, {merge:true}); }
+  else if(existing){ db.collection(COL).doc('data').collection('dues').doc(existing.id).set({paid:true, paidDate:todayStr()}, {merge:true}); }
+  else { db.collection(COL).doc('data').collection('dues').add({ memberId, semester, amount, paid:true, paidDate:todayStr(), method:"현금" }); }
+}
+function renderDues(){
+  const semester = document.getElementById('duesSemesterFilter').value;
+  const semObj = state.semesters.find(s=>s.label===semester);
+  const body = document.getElementById('duesBody');
+  if(!semester || state.members.length===0){
+    body.innerHTML = `<tr><td colspan="6"><div class="empty"><b>표시할 데이터가 없습니다</b>회비 대상자 탭에서 대상자를, '학기 설정'에서 학기를 등록해주세요.</div></td></tr>`;
+    updateDashboard(); return;
+  }
+  body.innerHTML = state.members.map(m=>{
+    const due = getDue(m.id, semester);
+    const paid = due && due.paid;
+    return `
+      <tr>
+        <td>${esc(m.name)}</td>
+        <td class="muted">${esc(m.dept||'-')}</td>
+        <td class="num">${won(semObj.amount)}</td>
+        <td class="muted">${paid ? esc(due.paidDate||'-') : '-'}</td>
+        <td class="muted">${paid ? esc(due.method||'현금') : '-'}</td>
+        <td style="text-align:center;"><button class="stamp-btn ${paid?'paid':''}" onclick="toggleDuePaid('${m.id}','${semester}',${semObj.amount})" ${isAdmin?'':'disabled style="cursor:default;opacity:.7;"'}>${paid?'完納':'未納'}</button></td>
+      </tr>`;
+  }).join('');
+  updateDashboard();
+}
+
+/* ================= EXPENSES ================= */
+document.getElementById('exReceipt').addEventListener('change', function(e){
+  const file = e.target.files[0];
+  if(!file){ draftReceiptBase64 = null; return; }
+  const reader = new FileReader();
+  reader.onload = function(ev){
+    const img = new Image();
+    img.onload = function(){
+      const maxW = 900; const scale = Math.min(1, maxW/img.width);
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width*scale; canvas.height = img.height*scale;
+      canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);
+      draftReceiptBase64 = canvas.toDataURL('image/jpeg', 0.7);
+      document.getElementById('exReceiptStatus').textContent = "첨부됨 ✓";
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+});
+function saveExpense(){
+  const date = document.getElementById('exDate').value || todayStr();
+  const category = document.getElementById('exCategory').value;
+  const item = document.getElementById('exItem').value.trim();
+  const amount = Number(document.getElementById('exAmount').value);
+  const note = document.getElementById('exNote').value.trim();
+  if(!item || !amount){ toast("항목명과 금액을 입력하세요."); return; }
+  db.collection(COL).doc('data').collection('expenses').add({ date, category, item, amount, note, receipt: draftReceiptBase64 || null, registeredBy: currentUser.name });
+  ['exItem','exAmount','exNote'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('exReceipt').value=''; document.getElementById('exReceiptStatus').textContent='첨부 없음';
+  draftReceiptBase64 = null;
+  toggleForm('expenseForm');
+  toast("지출 내역이 저장되었습니다.");
+}
+function deleteExpense(id){ if(!confirm("이 지출 내역을 삭제할까요?")) return; db.collection(COL).doc('data').collection('expenses').doc(id).delete(); }
+function openImgModal(src){ document.getElementById('imgModalSrc').src = src; document.getElementById('imgModalBg').classList.add('open'); }
+function closeImgModal(e){ if(e.target.id==='imgModalBg') document.getElementById('imgModalBg').classList.remove('open'); }
+function renderExpenses(){
+  const body = document.getElementById('expenseBody');
+  if(state.expenses.length===0){
+    body.innerHTML = `<tr><td colspan="7"><div class="empty"><b>등록된 지출 내역이 없습니다</b>총무가 지출을 등록하고 증빙사진을 첨부해보세요.</div></td></tr>`;
+  } else {
+    body.innerHTML = state.expenses.map(e=>`
+      <tr>
+        <td class="muted">${esc(e.date)}</td><td>${esc(e.category)}</td><td>${esc(e.item)}</td><td class="muted">${esc(e.note||'-')}</td>
+        <td class="num">${won(e.amount)}</td>
+        <td>${ e.receipt ? `<img class="receipt-thumb" src="${e.receipt}" onclick="openImgModal('${e.receipt}')">` : `<span class="no-receipt">없음</span>` }</td>
+        <td class="admin-only ${isAdmin?'':'hidden'}" style="text-align:right;"><span class="link-x" onclick="deleteExpense('${e.id}')">삭제</span></td>
+      </tr>
+    `).join('');
+  }
+  const totalOut = state.expenses.reduce((s,e)=>s+Number(e.amount||0),0);
+  const totalIn = state.dues.filter(d=>d.paid).reduce((s,d)=>s+Number(d.amount||0),0);
+  document.getElementById('exTotalIn').textContent = won(totalIn);
+  document.getElementById('exTotalOut').textContent = won(totalOut);
+  document.getElementById('exBalance').textContent = won(totalIn-totalOut);
+}
+
+/* ================= SURVEYS ================= */
+function addQuestionField(){ draftQuestions.push({id:uid(), type:'single', text:'', options:['','']}); renderQuestionEditor(); }
+function renderQuestionEditor(){
+  const wrap = document.getElementById('svQuestions');
+  wrap.innerHTML = draftQuestions.map((q,qi)=>`
+    <div class="q-item">
+      <div class="q-item-top">
+        <input type="text" placeholder="질문 내용" value="${escAttr(q.text)}" oninput="draftQuestions[${qi}].text=this.value">
+        <select style="width:130px;" onchange="changeQType(${qi}, this.value)">
+          <option value="single" ${q.type==='single'?'selected':''}>단일 선택</option>
+          <option value="multi" ${q.type==='multi'?'selected':''}>복수 선택</option>
+          <option value="text" ${q.type==='text'?'selected':''}>주관식</option>
+        </select>
+        <span class="link-x" onclick="removeQuestion(${qi})">삭제</span>
+      </div>
+      ${q.type!=='text' ? `
+        <div id="opts-${qi}">
+          ${q.options.map((o,oi)=>`
+            <div class="opt-row">
+              <input type="text" placeholder="선택지 ${oi+1}" value="${escAttr(o)}" oninput="draftQuestions[${qi}].options[${oi}]=this.value">
+              <span class="link-x" onclick="removeOption(${qi},${oi})">✕</span>
+            </div>
+          `).join('')}
+          <span class="link-x" style="color:var(--ink-soft);" onclick="addOption(${qi})">+ 선택지 추가</span>
+        </div>
+      ` : ''}
+    </div>
+  `).join('');
+}
+function changeQType(qi, val){ draftQuestions[qi].type = val; renderQuestionEditor(); }
+function removeQuestion(qi){ draftQuestions.splice(qi,1); renderQuestionEditor(); }
+function addOption(qi){ draftQuestions[qi].options.push(''); renderQuestionEditor(); }
+function removeOption(qi,oi){ draftQuestions[qi].options.splice(oi,1); renderQuestionEditor(); }
+
+function publishSurvey(){
+  const title = document.getElementById('svTitle').value.trim();
+  const desc = document.getElementById('svDesc').value.trim();
+  const closesAt = document.getElementById('svClose').value || null;
+  if(!title){ toast("제목을 입력하세요."); return; }
+  if(draftQuestions.length===0){ toast("질문을 1개 이상 추가하세요."); return; }
+  const questions = draftQuestions.map(q=> q.type==='text' ? {id:q.id, type:q.type, text:q.text} : {id:q.id, type:q.type, text:q.text, options:q.options.filter(o=>o.trim())});
+  db.collection(COL).doc('data').collection('surveys').add({ title, desc, closesAt, status:'open', createdAt: new Date().toISOString(), questions, createdBy: currentUser.name });
+  document.getElementById('svTitle').value=''; document.getElementById('svDesc').value=''; document.getElementById('svClose').value='';
+  draftQuestions = []; renderQuestionEditor();
+  toggleForm('surveyForm');
+  toast("수요조사가 게시되었습니다.");
+}
+function closeSurvey(id, current){ db.collection(COL).doc('data').collection('surveys').doc(id).set({status: current==='open'?'closed':'open'}, {merge:true}); }
+function deleteSurvey(id){
+  if(!confirm("이 수요조사와 응답을 모두 삭제할까요?")) return;
+  db.collection(COL).doc('data').collection('surveys').doc(id).delete();
+  state.responses.filter(r=>r.surveyId===id).forEach(r=> db.collection(COL).doc('data').collection('responses').doc(r.id).delete());
+}
+function submitResponse(surveyId){
+  const survey = state.surveys.find(s=>s.id===surveyId);
+  const answers = {};
+  survey.questions.forEach(q=>{
+    if(q.type==='text'){ answers[q.id] = document.getElementById('ans-'+q.id).value.trim(); }
+    else if(q.type==='single'){ const sel = document.querySelector(`input[name="ans-${q.id}"]:checked`); answers[q.id] = sel ? sel.value : ''; }
+    else { const checks = document.querySelectorAll(`input[name="ans-${q.id}"]:checked`); answers[q.id] = Array.from(checks).map(c=>c.value); }
+  });
+  db.collection(COL).doc('data').collection('responses').add({ surveyId, respondentName:currentUser.name, respondentUid:currentUser.uid, answers, submittedAt: new Date().toISOString() });
+  toast("응답이 제출되었습니다. 감사합니다!");
+}
+function renderSurveys(){
+  const wrap = document.getElementById('surveyList');
+  if(state.surveys.length===0){ wrap.innerHTML = `<div class="empty"><b>진행중인 수요조사가 없습니다</b>총무가 새 수요조사를 만들어보세요.</div>`; return; }
+  wrap.innerHTML = state.surveys.map(s=>{
+    const myResponses = state.responses.filter(r=>r.surveyId===s.id);
+    const iAnswered = myResponses.some(r=>r.respondentUid===currentUser.uid);
+    let bodyHtml = '';
+    if(s.status==='open' && !iAnswered){
+      bodyHtml = `<div class="q-block">
+          ${s.questions.map(q=>`
+            <div class="q-block">
+              <div class="q-title">${esc(q.text)}</div>
+              ${q.type==='text' ? `<textarea id="ans-${q.id}" rows="2" placeholder="자유롭게 의견을 남겨주세요"></textarea>`
+                : q.options.map(o=>`<label style="display:flex;align-items:center;gap:6px;font-size:13px;margin:4px 0;"><input type="${q.type==='single'?'radio':'checkbox'}" name="ans-${q.id}" value="${escAttr(o)}"> ${esc(o)}</label>`).join('')}
+            </div>`).join('')}
+          <button class="btn gold sm" style="margin-top:12px;" onclick="submitResponse('${s.id}')">응답 제출</button>
+        </div>`;
+    } else if(iAnswered && s.status==='open'){
+      bodyHtml = `<div class="q-block muted" style="font-size:12.5px;">이미 응답을 제출하셨습니다. 감사합니다.</div>`;
+    }
+    const showResults = isAdmin || s.status==='closed';
+    let resultsHtml = '';
+    if(showResults && myResponses.length>0){
+      resultsHtml = `<div class="q-block"><div class="q-title" style="margin-bottom:10px;">📊 응답 결과 (총 ${myResponses.length}명)</div>` +
+        s.questions.map(q=>{
+          if(q.type==='text'){
+            const answers = myResponses.map(r=>r.answers[q.id]).filter(a=>a && a.trim());
+            return `<div style="margin-bottom:14px;"><div class="q-title">${esc(q.text)}</div>${answers.length ? answers.map(a=>`<div class="text-answer">${esc(a)}</div>`).join('') : '<div class="muted" style="font-size:12px;">응답 없음</div>'}</div>`;
+          } else {
+            const counts = {}; q.options.forEach(o=>counts[o]=0);
+            myResponses.forEach(r=>{ const a=r.answers[q.id]; if(Array.isArray(a)) a.forEach(v=>counts[v]=(counts[v]||0)+1); else if(a) counts[a]=(counts[a]||0)+1; });
+            const max = Math.max(1, ...Object.values(counts));
+            return `<div style="margin-bottom:14px;"><div class="q-title">${esc(q.text)}</div>` +
+              Object.entries(counts).map(([opt,c])=>`<div class="bar-row"><div class="bar-label">${esc(opt)}</div><div class="bar-track"><div class="bar-fill" style="width:${(c/max*100)}%;"></div></div><div class="bar-count">${c}</div></div>`).join('') + `</div>`;
+          }
+        }).join('') + `</div>`;
+    }
+    return `
+      <div class="survey-card">
+        <div class="survey-top">
+          <div><div class="survey-title">${esc(s.title)}</div><div class="survey-meta">${s.desc ? esc(s.desc)+' · ' : ''}${myResponses.length}명 응답${s.closesAt ? ' · 마감 '+esc(s.closesAt) : ''}</div></div>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <span class="badge ${s.status==='open'?'open':'closed'}">${s.status==='open'?'진행중':'마감'}</span>
+            <span class="admin-only ${isAdmin?'':'hidden'}">
+              <button class="btn outline sm" onclick="closeSurvey('${s.id}','${s.status}')">${s.status==='open'?'마감하기':'재개하기'}</button>
+              <button class="btn red sm" onclick="deleteSurvey('${s.id}')">삭제</button>
+            </span>
+          </div>
+        </div>
+        ${bodyHtml}${resultsHtml}
+      </div>`;
+  }).join('');
+}
+
+/* ================= TIMETABLE ================= */
+function openTTSetting(){ toggleForm('ttSettingForm'); }
+function saveTTPeriods(){
+  const n = Number(document.getElementById('newTTPeriods').value);
+  if(!n || n<1 || n>12){ toast("1~12 사이 숫자를 입력하세요."); return; }
+  db.collection(COL).doc('settings').set({ttPeriods:n}, {merge:true});
+  document.getElementById('newTTPeriods').value = '';
+  toast(`교시 수가 ${n}교시로 설정되었습니다.`);
+}
+function switchTTView(v){ ttView = v; renderTimetable(); }
+function selectTTDay(d){ ttSelectedDay = d; renderTimetable(); }
+function saveMyTimetable(){
+  const n = state.ttPeriods || 7;
+  const grid = {};
+  TT_DAYS.forEach(d=>{
+    for(let p=1; p<=n; p++){
+      const el = document.getElementById(`tt_${d}_${p}`);
+      if(el) grid[`${d}_${p}`] = el.value.trim();
+    }
+  });
+  db.collection(COL).doc('data').collection('timetables').doc(currentUser.uid).set({
+    ownerName: currentUser.name, dept: currentUser.dept||'', grid, updatedAt: new Date().toISOString()
+  }, {merge:true});
+  toast("시간표가 저장되었습니다.");
+}
+function renderTimetable(){
+  if(!currentUser) return;
+  document.querySelectorAll('.tt-subtab').forEach(b=> b.classList.toggle('active', b.dataset.view===ttView));
+  document.getElementById('tt-mine').classList.toggle('hidden', ttView!=='mine');
+  document.getElementById('tt-compare').classList.toggle('hidden', ttView!=='compare');
+  if(ttView==='mine') renderMyTimetableForm(); else renderTimetableCompare();
+}
+function renderMyTimetableForm(){
+  const n = state.ttPeriods || 7;
+  const my = state.timetables.find(t=>t.uid===currentUser.uid);
+  const grid = my ? (my.grid||{}) : {};
+  let html = `<table class="tt-grid-table"><thead><tr><th></th>${TT_DAYS.map(d=>`<th>${d}</th>`).join('')}</tr></thead><tbody>`;
+  for(let p=1; p<=n; p++){
+    html += `<tr><td class="muted">${p}교시</td>`;
+    TT_DAYS.forEach(d=>{
+      const key = `${d}_${p}`;
+      html += `<td><input type="text" class="tt-cell-input" id="tt_${d}_${p}" value="${escAttr(grid[key]||'')}" placeholder="공강"></td>`;
+    });
+    html += `</tr>`;
+  }
+  html += `</tbody></table>`;
+  document.getElementById('ttMineGrid').innerHTML = html;
+}
+function renderTimetableCompare(){
+  const n = state.ttPeriods || 7;
+  document.getElementById('ttDayTabs').innerHTML = TT_DAYS.map(d=>`<div class="tt-day ${ttSelectedDay===d?'active':''}" onclick="selectTTDay('${d}')">${d}요일</div>`).join('');
+  const teachers = state.timetables.slice().sort((a,b)=> (a.ownerName||'').localeCompare(b.ownerName||'', 'ko'));
+  const wrap = document.getElementById('ttCompareTable');
+  if(teachers.length===0){
+    wrap.innerHTML = `<div class="empty"><b>등록된 시간표가 없습니다</b>각 선생님이 '내 시간표 편집'에서 본인 시간표를 입력해주세요.</div>`;
+    return;
+  }
+  let html = `<table class="tt-grid-table"><thead><tr><th class="tt-teacher-name">교사</th>${Array.from({length:n},(_,i)=>`<th>${i+1}교시</th>`).join('')}</tr></thead><tbody>`;
+  teachers.forEach(t=>{
+    html += `<tr><td class="tt-teacher-name">${esc(t.ownerName)}${t.uid===currentUser.uid?' <span class="muted" style="font-weight:400;font-size:11px;">(나)</span>':''}</td>`;
+    for(let p=1; p<=n; p++){
+      const val = (t.grid && t.grid[`${ttSelectedDay}_${p}`]) || '';
+      html += `<td>${val ? `<span class="tt-subject">${esc(val)}</span>` : `<span class="tt-free">공강</span>`}</td>`;
+    }
+    html += `</tr>`;
+  });
+  html += `</tbody></table>`;
+  wrap.innerHTML = html;
+}
+
+/* ================= CHAT ================= */
+function switchChatView(v){
+  chatView = v;
+  document.querySelectorAll('#panel-chat .tt-subtab').forEach(b=> b.classList.toggle('active', b.dataset.cview===chatView));
+  document.getElementById('chat-group').classList.toggle('hidden', chatView!=='group');
+  document.getElementById('chat-dm').classList.toggle('hidden', chatView!=='dm');
+  if(chatView==='group') scrollGroupChatToBottom();
+}
+function renderChat(){
+  document.querySelectorAll('#panel-chat .tt-subtab').forEach(b=> b.classList.toggle('active', b.dataset.cview===chatView));
+  document.getElementById('chat-group').classList.toggle('hidden', chatView!=='group');
+  document.getElementById('chat-dm').classList.toggle('hidden', chatView!=='dm');
+  renderGroupChat();
+  renderDMList();
+  renderDMThread();
+}
+function isGroupChatNearBottom(){
+  const el = document.getElementById('groupChatMessages');
+  if(!el) return true;
+  return el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+}
+function scrollGroupChatToBottom(){
+  const el = document.getElementById('groupChatMessages');
+  if(el) el.scrollTop = el.scrollHeight;
+}
+function fmtChatTime(iso){
+  if(!iso) return '';
+  return new Date(iso).toLocaleString('ko-KR', {month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit'});
+}
+function sendGroupMsg(){
+  const input = document.getElementById('groupChatInput');
+  const text = input.value.trim();
+  if(!text) return;
+  db.collection(COL).doc('data').collection('groupMessages').add({ senderUid:currentUser.uid, senderName:currentUser.name, text, createdAt:new Date().toISOString() });
+  input.value = '';
+}
+function deleteGroupMsg(id, senderUid){
+  if(!isAdmin && senderUid!==currentUser.uid){ toast("본인 메시지만 삭제할 수 있습니다."); return; }
+  db.collection(COL).doc('data').collection('groupMessages').doc(id).delete();
+}
+function renderGroupChat(){
+  const wrap = document.getElementById('groupChatMessages');
+  if(!wrap) return;
+  if(state.groupMessages.length===0){
+    wrap.innerHTML = `<div class="empty sm"><b>대화가 없습니다</b>상업과 선생님들께 첫 메시지를 남겨보세요.</div>`;
+    return;
+  }
+  wrap.innerHTML = state.groupMessages.map(m=>{
+    const mine = m.senderUid === currentUser.uid;
+    return `
+      <div class="chat-bubble-row ${mine?'mine':'theirs'}">
+        ${mine?'':`<div class="chat-sender">${esc(m.senderName)}</div>`}
+        <div class="chat-bubble">${esc(m.text)}</div>
+        <div class="chat-time">${fmtChatTime(m.createdAt)}${(mine||isAdmin) ? ` · <span class="link-x" style="padding:0;" onclick="deleteGroupMsg('${m.id}','${m.senderUid}')">삭제</span>` : ''}</div>
+      </div>`;
+  }).join('');
+}
+
+function dmThreadId(otherUid){ return [currentUser.uid, otherUid].sort().join('_'); }
+function openDM(otherUid){
+  dmActiveUid = otherUid;
+  if(dmMessagesUnsub) dmMessagesUnsub();
+  const threadId = dmThreadId(otherUid);
+  dmMessagesUnsub = db.collection(COL).doc('data').collection('dmThreads').doc(threadId).collection('messages')
+    .orderBy('createdAt','asc').onSnapshot(snap=>{
+      state.dmMessages = snap.docs.map(d=>({id:d.id, ...d.data()}));
+      renderDMThread();
+      const el = document.getElementById('dmMessages');
+      if(el) el.scrollTop = el.scrollHeight;
+    });
+  document.getElementById('dmInput').disabled = false;
+  document.getElementById('dmSendBtn').disabled = false;
+  renderDMList();
+  renderDMThread();
+}
+function sendDM(){
+  if(!dmActiveUid){ toast("대화 상대를 먼저 선택하세요."); return; }
+  const input = document.getElementById('dmInput');
+  const text = input.value.trim();
+  if(!text) return;
+  const otherUser = state.allUsers.find(u=>u.uid===dmActiveUid);
+  const threadId = dmThreadId(dmActiveUid);
+  const threadRef = db.collection(COL).doc('data').collection('dmThreads').doc(threadId);
+  threadRef.set({
+    participants: [currentUser.uid, dmActiveUid],
+    participantNames: { [currentUser.uid]: currentUser.name, [dmActiveUid]: otherUser ? otherUser.name : '' },
+    lastMessage: text, lastAt: new Date().toISOString(), lastSenderUid: currentUser.uid
+  }, {merge:true});
+  threadRef.collection('messages').add({ senderUid:currentUser.uid, senderName:currentUser.name, text, createdAt:new Date().toISOString() });
+  input.value = '';
+}
+function renderDMList(){
+  const wrap = document.getElementById('dmList');
+  if(!wrap || !currentUser) return;
+  const otherTeachers = state.allUsers.filter(u=> u.status==='approved' && u.uid !== currentUser.uid);
+  const threadMap = {};
+  state.dmThreads.forEach(t=> threadMap[t.id] = t);
+
+  let html = '';
+  if(state.dmThreads.length>0){
+    html += `<div class="dm-section-label">대화중</div>`;
+    html += state.dmThreads.map(t=>{
+      const otherUid = t.participants.find(p=>p!==currentUser.uid);
+      const otherName = (t.participantNames && t.participantNames[otherUid]) || '(알 수 없음)';
+      return `
+        <div class="dm-list-item ${dmActiveUid===otherUid?'active':''}" onclick="openDM('${otherUid}')">
+          <div class="dm-avatar">${esc((otherName||'?').slice(0,1))}</div>
+          <div class="dm-list-info">
+            <div class="dm-list-name">${esc(otherName)}</div>
+            <div class="dm-list-preview">${t.lastSenderUid===currentUser.uid?'나: ':''}${esc(t.lastMessage||'')}</div>
+          </div>
+        </div>`;
+    }).join('');
+  }
+  const startedUids = new Set(state.dmThreads.map(t=> t.participants.find(p=>p!==currentUser.uid)));
+  const newTargets = otherTeachers.filter(u=> !startedUids.has(u.uid));
+  if(newTargets.length>0){
+    html += `<div class="dm-section-label">새 대화 시작</div>`;
+    html += newTargets.map(u=>`
+      <div class="dm-list-item ${dmActiveUid===u.uid?'active':''}" onclick="openDM('${u.uid}')">
+        <div class="dm-avatar">${esc((u.name||'?').slice(0,1))}</div>
+        <div class="dm-list-info">
+          <div class="dm-list-name">${esc(u.name)}</div>
+          <div class="dm-list-preview">${esc(u.dept||'')}</div>
+        </div>
+      </div>`).join('');
+  }
+  wrap.innerHTML = html || `<div class="empty sm">대화 가능한 선생님이 없습니다</div>`;
+}
+function renderDMThread(){
+  const head = document.getElementById('dmThreadHead');
+  const wrap = document.getElementById('dmMessages');
+  if(!dmActiveUid){
+    head.textContent = '왼쪽에서 대화 상대를 선택하세요';
+    wrap.innerHTML = '';
+    return;
+  }
+  const other = state.allUsers.find(u=>u.uid===dmActiveUid);
+  head.textContent = other ? `${other.name}${other.dept ? ' · '+other.dept : ''}` : '대화';
+  if(state.dmMessages.length===0){
+    wrap.innerHTML = `<div class="empty sm">아직 대화가 없습니다. 첫 메시지를 보내보세요.</div>`;
+    return;
+  }
+  wrap.innerHTML = state.dmMessages.map(m=>{
+    const mine = m.senderUid === currentUser.uid;
+    return `
+      <div class="chat-bubble-row ${mine?'mine':'theirs'}">
+        <div class="chat-bubble">${esc(m.text)}</div>
+        <div class="chat-time">${fmtChatTime(m.createdAt)}</div>
+      </div>`;
+  }).join('');
+}
+
+/* ================= DASHBOARD ================= */
+function updateDashboard(){
+  const totalIn = state.dues.filter(d=>d.paid).reduce((s,d)=>s+Number(d.amount||0),0);
+  const totalOut = state.expenses.reduce((s,e)=>s+Number(e.amount||0),0);
+  document.getElementById('dBalance').textContent = won(totalIn-totalOut);
+
+  const semester = document.getElementById('duesSemesterFilter').value;
+  const totalMembers = state.members.length;
+  const paidCount = semester ? state.members.filter(m=>{ const d=getDue(m.id, semester); return d && d.paid; }).length : 0;
+  const rate = totalMembers ? Math.round(paidCount/totalMembers*100) : 0;
+  document.getElementById('dRate').textContent = rate + '%';
+  document.getElementById('dRateSub').textContent = `${paidCount} / ${totalMembers}명`;
+  document.getElementById('dUnpaid').textContent = (totalMembers - paidCount) + '명';
+
+  const openSurveys = state.surveys.filter(s=>s.status==='open');
+  document.getElementById('dSurvey').textContent = openSurveys.length + '건';
+  document.getElementById('dSurveySub').textContent = openSurveys.length ? esc(openSurveys[0].title) : '없음';
+
+  const recent = state.expenses.slice(0,5);
+  const body = document.getElementById('dRecentExpense');
+  body.innerHTML = recent.length===0 ? `<tr><td colspan="5"><div class="empty" style="padding:24px;">지출 내역이 없습니다</div></td></tr>` :
+    recent.map(e=>`<tr><td class="muted">${esc(e.date)}</td><td>${esc(e.item)}</td><td class="muted">${esc(e.category)}</td><td class="num">${won(e.amount)}</td><td>${ e.receipt ? `<img class="receipt-thumb" src="${e.receipt}" onclick="openImgModal('${e.receipt}')">` : `<span class="no-receipt">없음</span>` }</td></tr>`).join('');
+}
+
+/* ================= RENDER ALL ================= */
+function renderAll(){
+  if(!currentUser) return;
+  renderMembers();
+  renderDues();
+  renderExpenses();
+  renderSurveys();
+  renderOpinions();
+  renderNotices();
+  renderEventList();
+  renderTimetable();
+  updateDashboard();
+  if(isAdmin) renderApproval();
+}
+</script>
+</body>
+</html>
