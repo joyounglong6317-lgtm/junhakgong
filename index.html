@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -11,6 +12,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
 <script src="https://t1.kakaocdn.net/kakao_js_sdk/2.7.4/kakao.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
   :root{
     --ink:#1C2B39; --ink-soft:#3C4E5E; --paper:#FBF8F2; --paper-line:#E4DDCB; --card:#FFFFFF;
@@ -258,6 +260,15 @@
   .setup-note{ font-size:12px; color:var(--ink-soft); background:var(--gold-soft); border:1px solid var(--gold); border-radius:8px; padding:10px 14px; margin-bottom:18px; line-height:1.6; }
   .setup-note code{ background:#fff; padding:1px 5px; border-radius:3px; font-family:'IBM Plex Mono'; font-size:11px; }
   .toast{ position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(20px); background:var(--ink); color:#fff; padding:10px 18px; border-radius:8px; font-size:12.5px; opacity:0; transition:all .25s; z-index:99; pointer-events:none; }
+  .chat-notify-stack{ position:fixed; bottom:22px; right:22px; z-index:300; display:flex; flex-direction:column-reverse; gap:10px; max-width:300px; }
+  .chat-notify-card{ background:var(--ink); color:#fff; border-radius:10px; padding:12px 14px 13px; box-shadow:0 10px 28px rgba(0,0,0,.28); cursor:pointer; animation:chatNotifyPop .35s ease; border:1px solid rgba(255,255,255,.08); }
+  .chat-notify-card:hover{ opacity:.93; transform:translateY(-1px); }
+  .chat-notify-top{ display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:4px; }
+  .chat-notify-title{ font-weight:700; font-size:12.5px; color:var(--gold); }
+  .chat-notify-badge{ font-size:10px; background:#E4574C; color:#fff; padding:2px 6px; border-radius:20px; flex-shrink:0; }
+  .chat-notify-body{ font-size:12.5px; line-height:1.4; color:#EFEBDF; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .chat-notify-hint{ font-size:10.5px; color:#B5AE99; margin-top:5px; }
+  @keyframes chatNotifyPop{ from{ opacity:0; transform:translateY(14px) scale(.97);} to{ opacity:1; transform:translateY(0) scale(1);} }
   .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
   @media (max-width:820px){
     .summary-row{ grid-template-columns:repeat(2,1fr); }
@@ -394,7 +405,7 @@
   <div class="panel" id="panel-notice">
     <div class="sec-head">
       <h2>공지사항</h2>
-      <button class="btn admin-only hidden" onclick="toggleForm('noticeForm')">+ 공지 작성</button>
+      <button class="btn" onclick="toggleForm('noticeForm')">+ 공지 작성</button>
     </div>
     <div class="form-card" id="noticeForm">
       <div class="auth-field"><label>제목</label><input type="text" id="ntTitle" placeholder="공지 제목"></div>
@@ -405,7 +416,7 @@
         <input type="file" id="ntFiles" multiple>
         <div class="no-receipt" id="ntFilesStatus" style="margin-top:5px;">선택된 파일 없음</div>
       </div>
-      <label class="chk" style="margin-bottom:12px;"><input type="checkbox" id="ntPinned"> 상단 고정</label>
+      <label class="chk admin-only hidden" style="margin-bottom:12px;"><input type="checkbox" id="ntPinned"> 상단 고정</label>
       <div class="form-actions">
         <button class="btn outline" onclick="toggleForm('noticeForm')">취소</button>
         <button class="btn" id="ntPublishBtn" onclick="publishNotice()">게시</button>
@@ -561,7 +572,10 @@
 
   <!-- 08 CHAT -->
   <div class="panel" id="panel-chat">
-    <div class="sec-head"><h2>채팅</h2></div>
+    <div class="sec-head">
+      <h2>채팅</h2>
+      <button class="btn outline sm" onclick="markAllChatRead()">✓ 모두 읽음으로 표시</button>
+    </div>
     <div class="tt-subtabs">
       <div class="tt-subtab" data-cview="group" onclick="switchChatView('group')">단체 채팅<span class="tab-dot hidden" id="groupChatDot"></span></div>
       <div class="tt-subtab" data-cview="dm" onclick="switchChatView('dm')">1:1 채팅<span class="tab-dot hidden" id="dmChatDot"></span></div>
@@ -626,6 +640,7 @@
     <div class="tt-subtabs">
       <div class="tt-subtab" data-view="mine" onclick="switchTTView('mine')">내 시간표 편집</div>
       <div class="tt-subtab" data-view="compare" onclick="switchTTView('compare')">전체 한눈에 보기</div>
+      <div class="tt-subtab admin-only hidden" data-view="manage" onclick="switchTTView('manage')">선생님별 업로드</div>
     </div>
 
     <div id="tt-mine">
@@ -638,6 +653,36 @@
       <div class="setup-note">요일을 선택하면 그 요일 교시별로 모든 선생님의 시간표를 한 번에 비교할 수 있습니다. 시간표를 교체할 상대를 찾을 때 활용하세요.</div>
       <div class="tt-day-tabs" id="ttDayTabs"></div>
       <div class="ledger" style="overflow-x:auto;padding:14px;" id="ttCompareTable"></div>
+    </div>
+
+    <div id="tt-manage" class="hidden">
+      <div class="setup-note">총무(관리자)가 다른 선생님의 시간표를 대신 입력하거나, 엑셀 파일로 여러 선생님의 시간표를 한 번에 업로드할 수 있습니다.</div>
+
+      <div class="form-card open" style="display:block;">
+        <div class="form-grid" style="grid-template-columns:1fr;">
+          <div><label>① 선생님 선택 후 직접 입력</label>
+            <select id="ttManageSelect" onchange="selectTTManageTeacher(this.value)"></select>
+          </div>
+        </div>
+      </div>
+      <div class="ledger" style="overflow-x:auto;padding:14px;" id="ttManageGrid"></div>
+      <div class="form-actions" style="margin-top:12px;"><button class="btn gold" onclick="saveTeacherTimetable()">선택한 선생님 시간표 저장</button></div>
+
+      <div class="form-card open" style="display:block;margin-top:22px;">
+        <div class="form-grid" style="grid-template-columns:1fr;">
+          <div>
+            <label>② 엑셀로 여러 선생님 시간표 한 번에 업로드</label>
+            <div class="setup-note" style="margin:4px 0 10px;">먼저 양식을 내려받아 성명별로 요일·교시별 과목을 채운 뒤 업로드하세요. 명단(회비 대상자)에 등록된 이름과 정확히 일치해야 반영됩니다.</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <button class="btn outline sm" onclick="downloadTTTemplate()">📥 엑셀 양식 내려받기</button>
+              <label class="btn sm" style="cursor:pointer;">
+                📤 엑셀 업로드
+                <input type="file" accept=".xlsx,.xls" style="display:none;" onchange="handleTTExcelUpload(this)">
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -654,6 +699,7 @@
   <div class="modal"><img id="imgModalSrc" src=""></div>
 </div>
 <div class="toast" id="toast"></div>
+<div class="chat-notify-stack" id="chatNotifyStack"></div>
 
 <script>
 /* =====================================================================
@@ -731,6 +777,7 @@ function shareEventToKakao(id){
 const COL = "junhakgong_chongmu";
 let currentUser = null;
 let isAdmin = false;
+let readStateLoaded = false;
 let state = { members:[], dues:[], expenses:[], surveys:[], responses:[], opinions:[], notices:[], events:[], timetables:[], ttPeriods:7, monthlyAmount:0, dueDay:17, baseBalance:0, orgName:"전학공 총무장부", allUsers:[], groupMessages:[], dmThreads:[], dmMessages:[], readState:{ groupLastRead:null, dmLastRead:{} } };
 let draftReceiptBase64 = null;
 let draftQuestions = [];
@@ -739,6 +786,8 @@ let selectedDate = null;
 const TT_DAYS = ['월','화','수','목','금'];
 let ttView = 'mine';
 let ttSelectedDay = '월';
+let ttManageUid = null;
+let ttManageList = [];
 let chatView = 'group';
 let dmActiveUid = null;
 let dmMessagesUnsub = null;
@@ -801,7 +850,7 @@ function doReset(){
   auth.sendPasswordResetEmail(email).then(()=>{ showMsg('resetMsg','재설정 메일을 보냈습니다. 메일함을 확인해주세요.', true); })
     .catch(err=>{ showMsg('resetMsg', translateAuthError(err), false); });
 }
-function doLogout(){ if(firebaseReady) auth.signOut(); currentUser=null; isAdmin=false; showScreen('login'); }
+function doLogout(){ if(firebaseReady) auth.signOut(); currentUser=null; isAdmin=false; readStateLoaded=false; showScreen('login'); }
 function resendVerification(){
   if(auth.currentUser){ auth.currentUser.sendEmailVerification().then(()=>toast("인증 메일을 재발송했습니다.")); }
 }
@@ -871,7 +920,8 @@ function showTab(name){
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   document.getElementById('panel-'+name).classList.add('active');
-  event.currentTarget.classList.add('active');
+  const tabBtn = document.querySelector(`.tab[onclick*="showTab('${name}')"]`);
+  if(tabBtn) tabBtn.classList.add('active');
   if(name==='calendar') renderCalendar();
   if(name==='timetable') renderTimetable();
   if(name==='chat') {
@@ -958,8 +1008,17 @@ function initSync(){
   db.collection(COL).doc('data').collection('readState').doc(currentUser.uid).onSnapshot(doc=>{
     state.readState = doc.exists ? Object.assign({groupLastRead:null, dmLastRead:{}}, doc.data()) : { groupLastRead:null, dmLastRead:{} };
     if(!state.readState.dmLastRead) state.readState.dmLastRead = {};
+    readStateLoaded = true;
     updateChatDots();
     renderDMList();
+  }, err=>{
+    console.error('readState listen error', err);
+    toast("읽음 상태를 불러오지 못했습니다. Firestore 권한 규칙을 확인해주세요.");
+    // 서버에서 읽음기록을 못 가져와도 여기서 막혀버리면 안읽음 점이 영원히
+    // 안 사라지므로, 실패해도 '로드는 됐다'고 처리해 이후의 markGroupRead/
+    // markDMRead(로컬 갱신)가 정상적으로 점을 갱신할 수 있게 한다.
+    readStateLoaded = true;
+    updateChatDots();
   });
 }
 
@@ -978,7 +1037,7 @@ function formatFileSize(bytes){
 async function publishNotice(){
   const title = document.getElementById('ntTitle').value.trim();
   const body = document.getElementById('ntBody').value.trim();
-  const pinned = document.getElementById('ntPinned').checked;
+  const pinned = isAdmin ? document.getElementById('ntPinned').checked : false;
   if(!title || !body){ toast("제목과 내용을 입력하세요."); return; }
   const fileInput = document.getElementById('ntFiles');
   const files = Array.from(fileInput.files || []);
@@ -997,7 +1056,7 @@ async function publishNotice(){
       const url = await fileRef.getDownloadURL();
       attachments.push({ name: f.name, url, size: f.size, path });
     }
-    await noticeRef.set({ title, body, pinned, attachments, authorName: currentUser.name, createdAt: new Date().toISOString() });
+    await noticeRef.set({ title, body, pinned, attachments, authorName: currentUser.name, authorUid: currentUser.uid, createdAt: new Date().toISOString() });
     document.getElementById('ntTitle').value=''; document.getElementById('ntBody').value=''; document.getElementById('ntPinned').checked=false;
     fileInput.value=''; document.getElementById('ntFilesStatus').textContent='선택된 파일 없음';
     toggleForm('noticeForm');
@@ -1010,12 +1069,15 @@ async function publishNotice(){
   }
 }
 function togglePinNotice(id, current){
+  if(!isAdmin){ toast("총무만 상단 고정을 변경할 수 있습니다."); return; }
   db.collection(COL).doc('data').collection('notices').doc(id).set({pinned: !current}, {merge:true});
 }
 function deleteNotice(id){
-  if(!confirm("이 공지와 첨부파일을 모두 삭제할까요?")) return;
   const notice = state.notices.find(n=>n.id===id);
-  if(notice && notice.attachments){
+  if(!notice) return;
+  if(!isAdmin && notice.authorUid !== currentUser.uid){ toast("본인이 작성한 공지만 삭제할 수 있습니다."); return; }
+  if(!confirm("이 공지와 첨부파일을 모두 삭제할까요?")) return;
+  if(notice.attachments){
     notice.attachments.forEach(a=>{
       if(a.path) storage.ref().child(a.path).delete().catch(()=>{});
     });
@@ -1025,7 +1087,7 @@ function deleteNotice(id){
 function renderNotices(){
   const wrap = document.getElementById('noticeList');
   if(state.notices.length===0){
-    wrap.innerHTML = `<div class="empty"><b>등록된 공지사항이 없습니다</b>총무가 공지를 작성하면 이곳에 표시됩니다.</div>`;
+    wrap.innerHTML = `<div class="empty"><b>등록된 공지사항이 없습니다</b>'+ 공지 작성'으로 첫 공지를 올려보세요.</div>`;
   } else {
     wrap.innerHTML = state.notices.map(n=>`
       <div class="notice-card ${n.pinned?'pinned':''}">
@@ -1037,12 +1099,12 @@ function renderNotices(){
         </div>
         <div class="notice-body">${esc(n.body)}</div>
         ${(n.attachments && n.attachments.length) ? `<div class="notice-attachments">${n.attachments.map(a=>`<a class="attach-chip" href="${a.url}" target="_blank" rel="noopener">📎 ${esc(a.name)} <span class="attach-size">${formatFileSize(a.size)}</span></a>`).join('')}</div>` : ''}
-        <div class="notice-actions admin-only ${isAdmin?'':'hidden'}" style="justify-content:flex-start;">
+        <div class="notice-actions" style="justify-content:flex-start;">
           <button class="btn outline sm" onclick="shareNoticeToKakao('${n.id}')">💬 카카오톡 공유</button>
         </div>
-        <div class="notice-actions admin-only ${isAdmin?'':'hidden'}">
-          <button class="btn outline sm" onclick="togglePinNotice('${n.id}', ${!!n.pinned})">${n.pinned?'고정 해제':'상단 고정'}</button>
-          <button class="btn red sm" onclick="deleteNotice('${n.id}')">삭제</button>
+        <div class="notice-actions">
+          <button class="btn outline sm admin-only ${isAdmin?'':'hidden'}" onclick="togglePinNotice('${n.id}', ${!!n.pinned})">${n.pinned?'고정 해제':'상단 고정'}</button>
+          ${(isAdmin || n.authorUid===currentUser.uid) ? `<button class="btn red sm" onclick="deleteNotice('${n.id}')">삭제</button>` : ''}
         </div>
       </div>
     `).join('');
@@ -1493,7 +1555,10 @@ function saveTTPeriods(){
   document.getElementById('newTTPeriods').value = '';
   toast(`교시 수가 ${n}교시로 설정되었습니다.`);
 }
-function switchTTView(v){ ttView = v; renderTimetable(); }
+function switchTTView(v){
+  if(v==='manage' && !isAdmin){ return; }
+  ttView = v; renderTimetable();
+}
 function selectTTDay(d){ ttSelectedDay = d; renderTimetable(); }
 function saveMyTimetable(){
   const n = state.ttPeriods || 7;
@@ -1514,7 +1579,133 @@ function renderTimetable(){
   document.querySelectorAll('.tt-subtab').forEach(b=> b.classList.toggle('active', b.dataset.view===ttView));
   document.getElementById('tt-mine').classList.toggle('hidden', ttView!=='mine');
   document.getElementById('tt-compare').classList.toggle('hidden', ttView!=='compare');
-  if(ttView==='mine') renderMyTimetableForm(); else renderTimetableCompare();
+  document.getElementById('tt-manage').classList.toggle('hidden', ttView!=='manage');
+  if(ttView==='mine') renderMyTimetableForm();
+  else if(ttView==='compare') renderTimetableCompare();
+  else if(ttView==='manage' && isAdmin) renderTTManage();
+}
+
+/* ---- 관리자: 다른 선생님 시간표 대신 입력/업로드 ---- */
+function getTTTeacherCandidates(){
+  // 로그인 계정이 있는 선생님 + 회비 명단에만 있는 선생님(계정 없음)을 합쳐서 후보로 제공
+  const accountTeachers = state.allUsers
+    .filter(u=>u.status==='approved')
+    .map(u=>({ uid:u.uid, name:u.name||'', dept:u.dept||'' }));
+  const accountNames = new Set(accountTeachers.map(t=>t.name));
+  const memberOnly = state.members
+    .filter(m=>m.name && !accountNames.has(m.name))
+    .map(m=>({ uid:'member_'+m.id, name:m.name||'', dept:m.dept||'' }));
+  return accountTeachers.concat(memberOnly).sort((a,b)=> (a.name||'').localeCompare(b.name||'', 'ko'));
+}
+function renderTTManage(){
+  ttManageList = getTTTeacherCandidates();
+  if(!ttManageUid || !ttManageList.some(t=>t.uid===ttManageUid)){
+    ttManageUid = ttManageList.length ? ttManageList[0].uid : null;
+  }
+  const sel = document.getElementById('ttManageSelect');
+  sel.innerHTML = ttManageList.length
+    ? ttManageList.map(t=>`<option value="${t.uid}" ${t.uid===ttManageUid?'selected':''}>${esc(t.name)}${t.dept?' · '+esc(t.dept):''}</option>`).join('')
+    : `<option value="">등록된 선생님이 없습니다 (회비 대상자 명단에 먼저 등록)</option>`;
+  renderTTManageGrid();
+}
+function selectTTManageTeacher(uid){ ttManageUid = uid; renderTTManageGrid(); }
+function renderTTManageGrid(){
+  const wrap = document.getElementById('ttManageGrid');
+  if(!ttManageUid){ wrap.innerHTML = `<div class="empty sm">'회비 대상자' 탭에서 선생님을 먼저 등록해주세요.</div>`; return; }
+  const n = state.ttPeriods || 7;
+  const existing = state.timetables.find(t=>t.uid===ttManageUid);
+  const grid = existing ? (existing.grid||{}) : {};
+  let html = `<table class="tt-grid-table"><thead><tr><th></th>${TT_DAYS.map(d=>`<th>${d}</th>`).join('')}</tr></thead><tbody>`;
+  for(let p=1; p<=n; p++){
+    html += `<tr><td class="muted">${p}교시</td>`;
+    TT_DAYS.forEach(d=>{
+      const key = `${d}_${p}`;
+      html += `<td><input type="text" class="tt-cell-input" id="ttm_${d}_${p}" value="${escAttr(grid[key]||'')}" placeholder="공강"></td>`;
+    });
+    html += `</tr>`;
+  }
+  html += `</tbody></table>`;
+  wrap.innerHTML = html;
+}
+function saveTeacherTimetable(){
+  if(!ttManageUid){ toast("선생님을 먼저 선택하세요."); return; }
+  const n = state.ttPeriods || 7;
+  const grid = {};
+  TT_DAYS.forEach(d=>{
+    for(let p=1; p<=n; p++){
+      const el = document.getElementById(`ttm_${d}_${p}`);
+      if(el) grid[`${d}_${p}`] = el.value.trim();
+    }
+  });
+  const target = ttManageList.find(t=>t.uid===ttManageUid);
+  const ownerName = target ? target.name : '';
+  db.collection(COL).doc('data').collection('timetables').doc(ttManageUid).set({
+    ownerName, dept: target ? (target.dept||'') : '', grid,
+    updatedAt: new Date().toISOString(), updatedByAdmin: currentUser.name
+  }, {merge:true});
+  toast(`${ownerName} 선생님의 시간표가 저장되었습니다.`);
+}
+function downloadTTTemplate(){
+  const n = state.ttPeriods || 7;
+  const list = getTTTeacherCandidates();
+  const rows = [["성명","요일","교시","과목(공강은 비워두세요)"]];
+  const names = list.length ? list.map(t=>t.name) : ["예: 홍길동"];
+  names.forEach(name=>{
+    TT_DAYS.forEach(d=>{
+      for(let p=1; p<=n; p++){ rows.push([name, d, p, ""]); }
+    });
+  });
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [{wch:12},{wch:6},{wch:6},{wch:24}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "시간표양식");
+  XLSX.writeFile(wb, "선생님_시간표_업로드양식.xlsx");
+}
+function handleTTExcelUpload(input){
+  const file = input.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = (e)=>{
+    let rows;
+    try{
+      const wb = XLSX.read(e.target.result, {type:'array'});
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+    }catch(err){ toast("엑셀 파일을 읽을 수 없습니다."); input.value=''; return; }
+    const dataRows = rows.slice(1).filter(r=> r && String(r[0]||'').trim());
+    if(dataRows.length===0){ toast("업로드할 데이터가 없습니다. 양식을 확인해주세요."); input.value=''; return; }
+    const byName = {};
+    dataRows.forEach(r=>{
+      const name = String(r[0]||'').trim();
+      const day = String(r[1]||'').trim();
+      const period = Number(r[2]);
+      const subject = String(r[3]||'').trim();
+      if(!name || !TT_DAYS.includes(day) || !period) return;
+      if(!byName[name]) byName[name] = {};
+      if(subject) byName[name][`${day}_${period}`] = subject;
+    });
+    const names = Object.keys(byName);
+    const candidates = getTTTeacherCandidates();
+    const matched = [], unmatched = [];
+    const batch = db.batch();
+    names.forEach(name=>{
+      const target = candidates.find(t=>t.name===name);
+      if(!target){ unmatched.push(name); return; }
+      matched.push(name);
+      const ref = db.collection(COL).doc('data').collection('timetables').doc(target.uid);
+      batch.set(ref, {
+        ownerName: target.name, dept: target.dept||'', grid: byName[name],
+        updatedAt: new Date().toISOString(), updatedByAdmin: currentUser.name
+      }, {merge:true});
+    });
+    if(matched.length===0){ toast("일치하는 선생님을 찾지 못했습니다. 성명이 명단과 같은지 확인해주세요."); input.value=''; return; }
+    batch.commit().then(()=>{
+      toast(`${matched.length}명의 시간표가 업로드되었습니다.` + (unmatched.length ? ` (명단에 없어 제외: ${unmatched.join(', ')})` : ''));
+      input.value = '';
+      if(ttView==='manage') renderTTManageGrid();
+    }).catch(err=>{ toast("업로드 중 오류가 발생했습니다: "+err.message); input.value=''; });
+  };
+  reader.readAsArrayBuffer(file);
 }
 function renderMyTimetableForm(){
   const n = state.ttPeriods || 7;
@@ -1576,7 +1767,7 @@ function isDMThreadUnread(thread){
   return !readAt || (thread.lastAt||'') > readAt;
 }
 function updateChatDots(){
-  if(!currentUser) return;
+  if(!currentUser || !readStateLoaded) return;
   const groupUnread = isGroupUnread();
   const dmUnread = state.dmThreads.some(t=> isDMThreadUnread(t));
   const chatDot = document.getElementById('chatDot');
@@ -1585,22 +1776,82 @@ function updateChatDots(){
   if(chatDot) chatDot.classList.toggle('hidden', !(groupUnread || dmUnread));
   if(groupDot) groupDot.classList.toggle('hidden', !groupUnread);
   if(dmDot) dmDot.classList.toggle('hidden', !dmUnread);
+  updateChatNotifyPopups();
+}
+/* 관리자 화면 우하단 알림 카드: 새 채팅 메시지가 오면 뜨고, 관리자가 클릭해서
+   해당 대화를 직접 열어(=읽음 처리) 확인하기 전까지는 계속 표시됩니다. */
+function updateChatNotifyPopups(){
+  const wrap = document.getElementById('chatNotifyStack');
+  if(!wrap) return;
+  if(!currentUser || !isAdmin){ wrap.innerHTML = ''; return; }
+
+  const cards = [];
+  if(isGroupUnread()){
+    const last = state.groupMessages[state.groupMessages.length-1];
+    cards.push(`
+      <div class="chat-notify-card" onclick="openChatNotify('group')">
+        <div class="chat-notify-top">
+          <span class="chat-notify-title">💬 단체 채팅</span>
+          <span class="chat-notify-badge">NEW</span>
+        </div>
+        <div class="chat-notify-body"><b>${esc(last.senderName||'')}</b> · ${esc(last.text||'')}</div>
+        <div class="chat-notify-hint">클릭하면 대화를 열고 확인 처리됩니다</div>
+      </div>`);
+  }
+  state.dmThreads.filter(t=> isDMThreadUnread(t)).forEach(t=>{
+    const otherUid = t.participants.find(p=>p!==currentUser.uid);
+    const otherName = (t.participantNames && t.participantNames[otherUid]) || '선생님';
+    cards.push(`
+      <div class="chat-notify-card" onclick="openChatNotify('dm','${otherUid}')">
+        <div class="chat-notify-top">
+          <span class="chat-notify-title">📩 ${esc(otherName)} 선생님</span>
+          <span class="chat-notify-badge">NEW</span>
+        </div>
+        <div class="chat-notify-body">${esc(t.lastMessage||'')}</div>
+        <div class="chat-notify-hint">클릭하면 대화를 열고 확인 처리됩니다</div>
+      </div>`);
+  });
+  wrap.innerHTML = cards.join('');
+}
+function openChatNotify(kind, otherUid){
+  if(kind==='group'){
+    showTab('chat');
+    switchChatView('group');
+  } else {
+    // dmActiveUid를 먼저 클릭한 상대로 맞춰둬야, 화면 전환 과정에서 혹시
+    // 자동으로 실행되는 읽음 처리가 엉뚱한(이전에 보던) 대화가 아니라
+    // 실제로 클릭한 이 대화를 정확히 가리킨다.
+    dmActiveUid = otherUid;
+    showTab('chat');
+    switchChatView('dm');
+    openDM(otherUid);
+  }
 }
 function markGroupRead(){
   if(!currentUser) return;
   const latest = state.groupMessages.length ? state.groupMessages[state.groupMessages.length-1].createdAt : new Date().toISOString();
-  if(state.readState.groupLastRead === latest) return;
+  readStateLoaded = true;
+  if(state.readState.groupLastRead === latest){ updateChatDots(); return; }
   state.readState.groupLastRead = latest;
-  db.collection(COL).doc('data').collection('readState').doc(currentUser.uid).set({ groupLastRead: latest }, {merge:true});
+  db.collection(COL).doc('data').collection('readState').doc(currentUser.uid).set({ groupLastRead: latest }, {merge:true})
+    .catch(err=>{ console.error('markGroupRead failed', err); toast("읽음 처리가 저장되지 않았습니다 (권한 규칙 확인 필요)."); });
   updateChatDots();
 }
 function markDMRead(threadId){
   if(!currentUser) return;
   const now = new Date().toISOString();
+  readStateLoaded = true;
   state.readState.dmLastRead = state.readState.dmLastRead || {};
   state.readState.dmLastRead[threadId] = now;
-  db.collection(COL).doc('data').collection('readState').doc(currentUser.uid).set({ [`dmLastRead.${threadId}`]: now }, {merge:true});
+  db.collection(COL).doc('data').collection('readState').doc(currentUser.uid).set({ [`dmLastRead.${threadId}`]: now }, {merge:true})
+    .catch(err=>{ console.error('markDMRead failed', err); toast("읽음 처리가 저장되지 않았습니다 (권한 규칙 확인 필요)."); });
   updateChatDots();
+}
+function markAllChatRead(){
+  if(!currentUser) return;
+  markGroupRead();
+  state.dmThreads.forEach(t=> markDMRead(t.id));
+  toast("모든 채팅을 읽음으로 표시했습니다.");
 }
 function renderChat(){
   document.querySelectorAll('#panel-chat .tt-subtab').forEach(b=> b.classList.toggle('active', b.dataset.cview===chatView));
