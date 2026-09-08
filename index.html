@@ -204,10 +204,13 @@
   .tt-grid-table{ border-collapse:collapse; width:100%; }
   .tt-grid-table th, .tt-grid-table td{ text-align:center; padding:6px 8px; border:1px solid #F0ECDF; font-size:12.5px; white-space:nowrap; }
   .tt-grid-table th{ background:#F5F1E7; color:var(--ink-soft); font-weight:600; font-size:11.5px; }
-  .tt-cell-input{ width:100%; min-width:78px; text-align:center; font-size:12px; padding:5px 4px; }
-  .tt-free{ color:#C6BFA9; font-size:11.5px; }
+  .tt-cell-input{ width:100%; min-width:78px; text-align:center; font-size:12px; padding:5px 4px; border-radius:8px; border:1px solid var(--paper-line); background:#fff; transition:background .12s,border-color .12s; }
+  .tt-cell-input::placeholder{ color:#C9C2AC; font-style:italic; font-weight:400; }
+  .tt-cell-input.has-subject{ font-weight:800; color:#8A5A00; background:#FFF6DE; border-color:var(--gold); }
+  .tt-cell-input.is-free{ color:#B9B2A0; font-style:italic; background:#FAF8F2; }
+  .tt-free{ color:#B9B2A0; font-size:11.5px; font-style:italic; }
   .tt-teacher-name{ text-align:left !important; font-weight:600; }
-  .tt-subject{ font-size:12px; color:var(--ink); }
+  .tt-subject{ font-size:12.5px; font-weight:800; color:#8A5A00; background:#FFF6DE; border:1px solid #F0DFA0; border-radius:8px; padding:3px 8px; display:inline-block; }
 
   .dash-two-col{ display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:6px; }
   .mini-card{ background:var(--card); border:1px solid var(--paper-line); border-radius:10px; padding:14px 16px; box-shadow:var(--shadow); }
@@ -534,6 +537,7 @@
     <div class="form-card" id="eventForm">
       <div class="form-grid">
         <div><label>날짜</label><input type="date" id="evDate"></div>
+        <div><label>종료일 (선택, 여러 날 일정일 때만)</label><input type="date" id="evEndDate"></div>
         <div><label>시간 (선택)</label><input type="time" id="evTime"></div>
         <div><label>제목</label><input type="text" id="evTitle" placeholder="예: 2학기 전학공 정기모임"></div>
         <div><label>장소</label><input type="text" id="evLocation" placeholder="예: 상업과 준비실"></div>
@@ -543,6 +547,17 @@
       <div class="form-actions">
         <button class="btn outline" onclick="toggleForm('eventForm')">취소</button>
         <button class="btn" onclick="saveEvent()">등록</button>
+      </div>
+    </div>
+    <div class="form-card admin-only hidden" style="display:block;" id="eventBulkCard">
+      <label>📅 학사일정 엑셀로 한 번에 업로드</label>
+      <div class="setup-note" style="margin:4px 0 10px;">양식을 내려받아 날짜·제목을 채운 뒤 업로드하세요. 여러 날 이어지는 일정(방학, 대회 등)은 종료일 칸에 마지막 날짜를 적으면 하나의 일정으로 등록됩니다.</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn outline sm" onclick="downloadEventsTemplate()">📥 엑셀 양식 내려받기</button>
+        <label class="btn sm" style="cursor:pointer;">
+          📤 엑셀 업로드
+          <input type="file" accept=".xlsx,.xls" style="display:none;" onchange="handleEventsExcelUpload(this)">
+        </label>
       </div>
     </div>
     <div class="cal-card">
@@ -1130,13 +1145,17 @@ function selectDate(dateStr){
 function clearDateFilter(){ selectedDate = null; renderCalendar(); }
 function saveEvent(){
   const date = document.getElementById('evDate').value;
+  const endDateRaw = document.getElementById('evEndDate').value;
+  const endDate = (endDateRaw && endDateRaw >= date) ? endDateRaw : '';
   const time = document.getElementById('evTime').value;
   const title = document.getElementById('evTitle').value.trim();
   const location = document.getElementById('evLocation').value.trim();
   const desc = document.getElementById('evDesc').value.trim();
   if(!date || !title){ toast("날짜와 제목을 입력하세요."); return; }
-  db.collection(COL).doc('data').collection('events').add({ date, time, title, location, desc, createdBy: currentUser.name, createdAt:new Date().toISOString() });
-  document.getElementById('evTitle').value=''; document.getElementById('evLocation').value=''; document.getElementById('evDesc').value=''; document.getElementById('evTime').value='';
+  const payload = { date, time, title, location, desc, createdBy: currentUser.name, createdAt:new Date().toISOString() };
+  if(endDate) payload.endDate = endDate;
+  db.collection(COL).doc('data').collection('events').add(payload);
+  document.getElementById('evTitle').value=''; document.getElementById('evLocation').value=''; document.getElementById('evDesc').value=''; document.getElementById('evTime').value=''; document.getElementById('evEndDate').value='';
   toggleForm('eventForm');
   toast("일정이 등록되었습니다.");
 }
@@ -1144,6 +1163,7 @@ function deleteEvent(id){
   if(!confirm("이 일정을 삭제할까요?")) return;
   db.collection(COL).doc('data').collection('events').doc(id).delete();
 }
+function eventCoversDate(e, dateStr){ return e.date<=dateStr && (e.endDate||e.date)>=dateStr; }
 function renderCalendar(){
   const grid = document.getElementById('calGrid');
   document.getElementById('calLabel').textContent = `${calYear}년 ${calMonth+1}월`;
@@ -1155,7 +1175,7 @@ function renderCalendar(){
   for(let i=0;i<firstDay;i++) html += `<div class="cal-day other-month"><span class="cal-daynum">·</span></div>`;
   for(let d=1; d<=daysInMonth; d++){
     const dateStr = `${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-    const hasEvent = state.events.some(e=>e.date===dateStr);
+    const hasEvent = state.events.some(e=>eventCoversDate(e,dateStr));
     const isToday = dateStr===todayVal;
     const isSel = dateStr===selectedDate;
     html += `<div class="cal-day ${hasEvent?'has-event':''} ${isToday?'today':''} ${isSel?'selected':''}" ${hasEvent?`onclick="selectDate('${dateStr}')"`:''}>
@@ -1171,18 +1191,18 @@ function renderEventList(){
   const clearBtn = document.getElementById('clearFilterBtn');
   let list;
   if(selectedDate){
-    list = state.events.filter(e=>e.date===selectedDate);
+    list = state.events.filter(e=>eventCoversDate(e,selectedDate));
     titleEl.textContent = `${selectedDate} 일정`;
     clearBtn.style.display = '';
   } else {
-    list = state.events.filter(e=>e.date >= todayStr());
+    list = state.events.filter(e=>(e.endDate||e.date) >= todayStr());
     titleEl.textContent = '다가오는 일정';
     clearBtn.style.display = 'none';
   }
   wrap.innerHTML = list.length===0 ? `<div class="empty sm"><b>일정이 없습니다</b>${isAdmin?'총무 모드에서 일정을 등록해보세요.':''}</div>` :
     list.map(e=>`
       <div class="event-card">
-        <div class="event-date-chip">${esc(e.date)}${e.time?' '+esc(e.time):''}</div>
+        <div class="event-date-chip">${esc(e.date)}${e.endDate && e.endDate!==e.date ? ' ~ '+esc(e.endDate) : ''}${e.time?' '+esc(e.time):''}</div>
         <div class="event-info" style="flex:1;">
           <b>${esc(e.title)}</b>
           <div>${e.location?esc(e.location)+' · ':''}${esc(e.desc||'')}</div>
@@ -1193,9 +1213,71 @@ function renderEventList(){
     `).join('');
 
   const dWrap = document.getElementById('dEvents');
-  const upcoming = state.events.filter(e=>e.date >= todayStr()).slice(0,3);
+  const upcoming = state.events.filter(e=>(e.endDate||e.date) >= todayStr()).slice().sort((a,b)=>(a.date||"").localeCompare(b.date||"")).slice(0,3);
   dWrap.innerHTML = upcoming.length===0 ? `<div class="empty sm">예정된 일정이 없습니다</div>` :
-    upcoming.map(e=>`<div class="mini-item"><span class="mi-title">${esc(e.title)}</span><span class="mi-sub">${esc(e.date)}</span></div>`).join('');
+    upcoming.map(e=>`<div class="mini-item"><span class="mi-title">${esc(e.title)}</span><span class="mi-sub">${esc(e.date)}${e.endDate && e.endDate!==e.date ? ' ~ '+esc(e.endDate) : ''}</span></div>`).join('');
+}
+function downloadEventsTemplate(){
+  const rows = [
+    ["날짜","종료일(선택)","제목","장소(선택)","설명(선택)"],
+    ["2026-03-01","","삼일절","",""],
+    ["2026-07-23","2026-08-17","여름방학","","26일간"]
+  ];
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [{wch:12},{wch:12},{wch:28},{wch:14},{wch:20}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "학사일정양식");
+  XLSX.writeFile(wb, "학사일정_업로드양식.xlsx");
+}
+function handleEventsExcelUpload(input){
+  const file = input.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = (e)=>{
+    let rows;
+    try{
+      const wb = XLSX.read(e.target.result, {type:'array'});
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+    }catch(err){ toast("엑셀 파일을 읽을 수 없습니다."); input.value=''; return; }
+    const dateRe = /^\d{4}-\d{2}-\d{2}$/;
+    const toDateStr = (v)=>{
+      if(v instanceof Date) return `${v.getFullYear()}-${String(v.getMonth()+1).padStart(2,'0')}-${String(v.getDate()).padStart(2,'0')}`;
+      const s = String(v||'').trim();
+      return dateRe.test(s) ? s : '';
+    };
+    const dataRows = rows.slice(1).filter(r=> r && toDateStr(r[0]) && String(r[2]||'').trim());
+    if(dataRows.length===0){ toast("업로드할 데이터가 없습니다. 양식을 확인해주세요."); input.value=''; return; }
+    const items = dataRows.map(r=>{
+      const date = toDateStr(r[0]);
+      const endDateRaw = toDateStr(r[1]);
+      const title = String(r[2]||'').trim();
+      const location = String(r[3]||'').trim();
+      const desc = String(r[4]||'').trim();
+      const payload = { date, time:'', title, location, desc, createdBy: currentUser.name, createdAt:new Date().toISOString() };
+      if(endDateRaw && endDateRaw > date) payload.endDate = endDateRaw;
+      return payload;
+    });
+    const chunkSize = 400;
+    const chunks = [];
+    for(let i=0;i<items.length;i+=chunkSize) chunks.push(items.slice(i,i+chunkSize));
+    let done = 0;
+    const runChunk = (idx)=>{
+      if(idx>=chunks.length){
+        toast(`${items.length}건의 학사일정이 업로드되었습니다.`);
+        input.value = '';
+        return;
+      }
+      const batch = db.batch();
+      chunks[idx].forEach(payload=>{
+        const ref = db.collection(COL).doc('data').collection('events').doc();
+        batch.set(ref, payload);
+      });
+      batch.commit().then(()=> runChunk(idx+1)).catch(err=>{ toast("업로드 중 오류가 발생했습니다: "+err.message); input.value=''; });
+    };
+    runChunk(0);
+  };
+  reader.readAsArrayBuffer(file);
 }
 
 /* ================= APPROVAL (admin only) ================= */
@@ -1547,6 +1629,17 @@ function renderSurveys(){
 }
 
 /* ================= TIMETABLE ================= */
+function ttStyleCell(el){
+  if(!el) return;
+  const v = el.value.trim();
+  el.classList.toggle('has-subject', !!v && v!=='공강');
+  el.classList.toggle('is-free', !v || v==='공강');
+}
+function ttStyleAllCells(prefix, n){
+  TT_DAYS.forEach(d=>{
+    for(let p=1; p<=n; p++){ ttStyleCell(document.getElementById(`${prefix}_${d}_${p}`)); }
+  });
+}
 function openTTSetting(){ toggleForm('ttSettingForm'); }
 function saveTTPeriods(){
   const n = Number(document.getElementById('newTTPeriods').value);
@@ -1620,12 +1713,13 @@ function renderTTManageGrid(){
     html += `<tr><td class="muted">${p}교시</td>`;
     TT_DAYS.forEach(d=>{
       const key = `${d}_${p}`;
-      html += `<td><input type="text" class="tt-cell-input" id="ttm_${d}_${p}" value="${escAttr(grid[key]||'')}" placeholder="공강"></td>`;
+      html += `<td><input type="text" class="tt-cell-input" id="ttm_${d}_${p}" value="${escAttr(grid[key]||'')}" placeholder="☕ 공강" oninput="ttStyleCell(this)"></td>`;
     });
     html += `</tr>`;
   }
   html += `</tbody></table>`;
   wrap.innerHTML = html;
+  ttStyleAllCells('ttm', n);
 }
 function saveTeacherTimetable(){
   if(!ttManageUid){ toast("선생님을 먼저 선택하세요."); return; }
@@ -1717,12 +1811,13 @@ function renderMyTimetableForm(){
     html += `<tr><td class="muted">${p}교시</td>`;
     TT_DAYS.forEach(d=>{
       const key = `${d}_${p}`;
-      html += `<td><input type="text" class="tt-cell-input" id="tt_${d}_${p}" value="${escAttr(grid[key]||'')}" placeholder="공강"></td>`;
+      html += `<td><input type="text" class="tt-cell-input" id="tt_${d}_${p}" value="${escAttr(grid[key]||'')}" placeholder="☕ 공강" oninput="ttStyleCell(this)"></td>`;
     });
     html += `</tr>`;
   }
   html += `</tbody></table>`;
   document.getElementById('ttMineGrid').innerHTML = html;
+  ttStyleAllCells('tt', n);
 }
 function renderTimetableCompare(){
   const n = state.ttPeriods || 7;
@@ -1738,7 +1833,7 @@ function renderTimetableCompare(){
     html += `<tr><td class="tt-teacher-name">${esc(t.ownerName)}${t.uid===currentUser.uid?' <span class="muted" style="font-weight:400;font-size:11px;">(나)</span>':''}</td>`;
     for(let p=1; p<=n; p++){
       const val = (t.grid && t.grid[`${ttSelectedDay}_${p}`]) || '';
-      html += `<td>${val ? `<span class="tt-subject">${esc(val)}</span>` : `<span class="tt-free">공강</span>`}</td>`;
+      html += `<td>${val ? `<span class="tt-subject">📘 ${esc(val)}</span>` : `<span class="tt-free">☕ 공강</span>`}</td>`;
     }
     html += `</tr>`;
   });
