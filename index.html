@@ -63,7 +63,9 @@
   .logout-link{ color:var(--red); cursor:pointer; font-weight:600; }
 
   .tabs{ display:flex; gap:4px; margin-bottom:20px; overflow-x:auto; }
-  .tab{ font-family:'Noto Serif KR'; font-weight:600; font-size:14px; padding:11px 18px 9px; background:var(--card); color:var(--ink-soft); border:1px solid var(--paper-line); border-bottom:none; border-radius:8px 8px 0 0; cursor:pointer; white-space:nowrap; position:relative; top:1px; }
+  .tab{ font-family:'Noto Serif KR'; font-weight:600; font-size:14px; padding:11px 18px 9px; background:var(--card); color:var(--ink-soft); border:1px solid var(--paper-line); border-bottom:none; border-radius:8px 8px 0 0; cursor:grab; white-space:nowrap; position:relative; top:1px; }
+  .tab.dragging{ opacity:.35; cursor:grabbing; }
+  .tab.drag-over{ border-left:2px solid var(--gold); }
   .tab.active{ color:var(--ink); background:var(--paper); border-color:var(--ink); border-bottom:1px solid var(--paper); }
   .tab .tab-num{ font-family:'IBM Plex Mono'; font-size:10px; color:var(--gold); margin-right:6px; }
   .tab .tab-dot{ display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--red); margin-left:6px; }
@@ -260,6 +262,12 @@
   .modal-bg.open{ display:flex; }
   .modal{ background:#fff; border-radius:10px; padding:20px; max-width:520px; width:92%; max-height:85vh; overflow:auto; }
   .modal img{ width:100%; border-radius:6px; }
+  .photo-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(160px,1fr)); gap:12px; margin-top:16px; }
+  .photo-card{ background:var(--card); border:1px solid var(--paper-line); border-radius:10px; overflow:hidden; }
+  .photo-card img{ width:100%; aspect-ratio:1/1; object-fit:cover; display:block; cursor:pointer; }
+  .photo-card .photo-meta{ padding:8px 10px; }
+  .photo-card .photo-caption{ font-size:12px; color:var(--ink); line-height:1.4; margin-bottom:4px; word-break:break-word; }
+  .photo-card .photo-sub{ font-size:10.5px; color:var(--ink-soft); display:flex; justify-content:space-between; align-items:center; }
   .setup-note{ font-size:12px; color:var(--ink-soft); background:var(--gold-soft); border:1px solid var(--gold); border-radius:8px; padding:10px 14px; margin-bottom:18px; line-height:1.6; }
   .setup-note code{ background:#fff; padding:1px 5px; border-radius:3px; font-family:'IBM Plex Mono'; font-size:11px; }
   .toast{ position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(20px); background:var(--ink); color:#fff; padding:10px 18px; border-radius:8px; font-size:12.5px; opacity:0; transition:all .25s; z-index:99; pointer-events:none; }
@@ -372,18 +380,19 @@
     또한 Firestore 보안 규칙을 반드시 적용해야 안전합니다 (하단 안내 참고).
   </div>
 
-  <div class="tabs">
-    <div class="tab active" onclick="showTab('dash')"><span class="tab-num">01</span>현황판</div>
-    <div class="tab" onclick="showTab('notice')"><span class="tab-num">02</span>공지사항</div>
-    <div class="tab" onclick="showTab('dues')"><span class="tab-num">03</span>회비 납부</div>
-    <div class="tab" onclick="showTab('expense')"><span class="tab-num">04</span>지출 · 증빙</div>
-    <div class="tab" onclick="showTab('survey')"><span class="tab-num">05</span>수요조사</div>
-    <div class="tab" onclick="showTab('calendar')"><span class="tab-num">06</span>일정</div>
-    <div class="tab" onclick="showTab('opinion')"><span class="tab-num">07</span>의견</div>
-    <div class="tab" onclick="showTab('chat')"><span class="tab-num">08</span>채팅<span class="tab-dot hidden" id="chatDot"></span></div>
-    <div class="tab" onclick="showTab('members')"><span class="tab-num">09</span>회비 대상자</div>
-    <div class="tab" onclick="showTab('timetable')"><span class="tab-num">10</span>시간표</div>
-    <div class="tab admin-only hidden" onclick="showTab('approval')"><span class="tab-num">11</span>회원 승인<span class="tab-dot hidden" id="pendingDot"></span></div>
+  <div class="tabs" id="tabsBar">
+    <div class="tab active" data-key="dash" draggable="true" ondragstart="tabDragStart(event)" ondragover="tabDragOver(event)" ondragend="tabDragEnd(event)" onclick="showTab('dash')"><span class="tab-num">01</span>현황판</div>
+    <div class="tab" data-key="notice" draggable="true" ondragstart="tabDragStart(event)" ondragover="tabDragOver(event)" ondragend="tabDragEnd(event)" onclick="showTab('notice')"><span class="tab-num">02</span>공지사항</div>
+    <div class="tab" data-key="dues" draggable="true" ondragstart="tabDragStart(event)" ondragover="tabDragOver(event)" ondragend="tabDragEnd(event)" onclick="showTab('dues')"><span class="tab-num">03</span>회비 납부</div>
+    <div class="tab" data-key="expense" draggable="true" ondragstart="tabDragStart(event)" ondragover="tabDragOver(event)" ondragend="tabDragEnd(event)" onclick="showTab('expense')"><span class="tab-num">04</span>지출 · 증빙</div>
+    <div class="tab" data-key="survey" draggable="true" ondragstart="tabDragStart(event)" ondragover="tabDragOver(event)" ondragend="tabDragEnd(event)" onclick="showTab('survey')"><span class="tab-num">05</span>수요조사</div>
+    <div class="tab" data-key="calendar" draggable="true" ondragstart="tabDragStart(event)" ondragover="tabDragOver(event)" ondragend="tabDragEnd(event)" onclick="showTab('calendar')"><span class="tab-num">06</span>일정</div>
+    <div class="tab" data-key="opinion" draggable="true" ondragstart="tabDragStart(event)" ondragover="tabDragOver(event)" ondragend="tabDragEnd(event)" onclick="showTab('opinion')"><span class="tab-num">07</span>의견</div>
+    <div class="tab" data-key="chat" draggable="true" ondragstart="tabDragStart(event)" ondragover="tabDragOver(event)" ondragend="tabDragEnd(event)" onclick="showTab('chat')"><span class="tab-num">08</span>채팅<span class="tab-dot hidden" id="chatDot"></span></div>
+    <div class="tab" data-key="members" draggable="true" ondragstart="tabDragStart(event)" ondragover="tabDragOver(event)" ondragend="tabDragEnd(event)" onclick="showTab('members')"><span class="tab-num">09</span>회비 대상자</div>
+    <div class="tab" data-key="timetable" draggable="true" ondragstart="tabDragStart(event)" ondragover="tabDragOver(event)" ondragend="tabDragEnd(event)" onclick="showTab('timetable')"><span class="tab-num">10</span>시간표</div>
+    <div class="tab admin-only hidden" data-key="approval" draggable="true" ondragstart="tabDragStart(event)" ondragover="tabDragOver(event)" ondragend="tabDragEnd(event)" onclick="showTab('approval')"><span class="tab-num">11</span>회원 승인<span class="tab-dot hidden" id="pendingDot"></span></div>
+    <div class="tab" data-key="photos" draggable="true" ondragstart="tabDragStart(event)" ondragover="tabDragOver(event)" ondragend="tabDragEnd(event)" onclick="showTab('photos')"><span class="tab-num">12</span>사진첩</div>
   </div>
 
   <!-- 01 DASHBOARD -->
@@ -708,6 +717,27 @@
     <div class="sec-head"><h2>전체 계정 · 권한 관리</h2></div>
     <div id="allUserList"></div>
   </div>
+
+  <!-- 12 PHOTOS -->
+  <div class="panel" id="panel-photos">
+    <div class="sec-head">
+      <h2>상업과 사진첩</h2>
+      <button class="btn" onclick="toggleForm('photoForm')">+ 사진 올리기</button>
+    </div>
+    <div class="form-card" id="photoForm">
+      <div class="setup-note" style="margin-bottom:10px;">여러 장을 한 번에 선택할 수 있어요. 큰 사진도 올리는 순간 자동으로 화면에 맞게 압축돼서 용량 걱정 없이 편하게 올리시면 됩니다.</div>
+      <label>사진 선택 (여러 장 가능)</label>
+      <input type="file" id="phFiles" accept="image/*" multiple style="margin-bottom:10px;">
+      <div class="setup-note" id="phFilesStatus" style="margin:0 0 10px;">선택된 파일 없음</div>
+      <label style="font-size:11px;color:var(--ink-soft);">설명 (선택, 여러 장에 공통으로 붙어요)</label>
+      <textarea id="phCaption" rows="2" placeholder="예: 2026 전국상업경진대회 현장" style="margin-bottom:10px;"></textarea>
+      <div class="form-actions">
+        <button class="btn outline" onclick="toggleForm('photoForm')">취소</button>
+        <button class="btn" id="phUploadBtn" onclick="uploadPhotos()">업로드</button>
+      </div>
+    </div>
+    <div class="photo-grid" id="photoGrid"></div>
+  </div>
 </div>
 
 <div class="modal-bg" id="imgModalBg" onclick="closeImgModal(event)">
@@ -739,7 +769,7 @@
       (예: https://사용자명.github.io) 를 등록해야 공유 버튼이 작동합니다.
 ===================================================================== */
 const firebaseConfig = {
-    apiKey: "AIzaSyBtjjq3BPhb5yKRmCZzUzp2O9TB1EDMVys",
+  apiKey: "AIzaSyBtjjq3BPhb5yKRmCZzUzp2O9TB1EDMVys",
   authDomain: "accountingteacher.firebaseapp.com",
   projectId: "accountingteacher",
   storageBucket: "accountingteacher.firebasestorage.app",
@@ -793,7 +823,7 @@ const COL = "junhakgong_chongmu";
 let currentUser = null;
 let isAdmin = false;
 let readStateLoaded = false;
-let state = { members:[], dues:[], expenses:[], surveys:[], responses:[], opinions:[], notices:[], events:[], timetables:[], ttPeriods:7, monthlyAmount:0, dueDay:17, baseBalance:0, orgName:"전학공 총무장부", allUsers:[], groupMessages:[], dmThreads:[], dmMessages:[], readState:{ groupLastRead:null, dmLastRead:{} } };
+let state = { members:[], dues:[], expenses:[], surveys:[], responses:[], opinions:[], notices:[], events:[], timetables:[], photos:[], ttPeriods:7, monthlyAmount:0, dueDay:17, baseBalance:0, orgName:"전학공 총무장부", allUsers:[], groupMessages:[], dmThreads:[], dmMessages:[], readState:{ groupLastRead:null, dmLastRead:{} } };
 let draftReceiptBase64 = null;
 let draftQuestions = [];
 let calYear = new Date().getFullYear(), calMonth = new Date().getMonth();
@@ -927,10 +957,63 @@ function enterApp(){
   rb.textContent = isAdmin ? '총무' : '회원';
   rb.className = 'role-badge ' + (isAdmin ? 'admin' : 'member');
   document.querySelectorAll('.admin-only').forEach(el=> el.classList.toggle('hidden', !isAdmin));
+  renumberTabs();
   initSync();
 }
 
 /* ---------- tabs ---------- */
+let draggedTab = null;
+function tabDragStart(e){
+  draggedTab = e.currentTarget;
+  draggedTab.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+  try{ e.dataTransfer.setData('text/plain', draggedTab.dataset.key || ''); }catch(err){}
+}
+function tabDragOver(e){
+  e.preventDefault();
+  const target = e.currentTarget;
+  if(!draggedTab || target===draggedTab) return;
+  const wrap = document.getElementById('tabsBar');
+  const tabs = [...wrap.children];
+  const draggedIdx = tabs.indexOf(draggedTab);
+  const targetIdx = tabs.indexOf(target);
+  if(draggedIdx < targetIdx) target.after(draggedTab);
+  else target.before(draggedTab);
+}
+function tabDragEnd(e){
+  if(draggedTab) draggedTab.classList.remove('dragging');
+  draggedTab = null;
+  saveTabOrder();
+}
+function saveTabOrder(){
+  const order = [...document.getElementById('tabsBar').children].map(t=>t.dataset.key);
+  try{ localStorage.setItem('jeonhakgongTabOrder', JSON.stringify(order)); }catch(err){}
+  renumberTabs();
+}
+function renumberTabs(){
+  const wrap = document.getElementById('tabsBar');
+  let n = 0;
+  [...wrap.children].forEach(tab=>{
+    const numEl = tab.querySelector('.tab-num');
+    if(!numEl) return;
+    if(tab.classList.contains('hidden')) return; // 지금 화면에 안 보이는 탭(예: 비관리자에게 숨겨진 '회원 승인')은 번호에서 제외
+    n++;
+    numEl.textContent = String(n).padStart(2,'0');
+  });
+}
+function restoreTabOrder(){
+  let saved;
+  try{ saved = JSON.parse(localStorage.getItem('jeonhakgongTabOrder')||'null'); }catch(err){ saved = null; }
+  const wrap = document.getElementById('tabsBar');
+  if(Array.isArray(saved) && saved.length){
+    saved.forEach(key=>{
+      const el = wrap.querySelector(`.tab[data-key="${key}"]`);
+      if(el) wrap.appendChild(el);
+    });
+  }
+  renumberTabs();
+}
+restoreTabOrder();
 function showTab(name){
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
@@ -998,6 +1081,10 @@ function initSync(){
     state.events = snap.docs.map(d=>({id:d.id, ...d.data()})).sort((a,b)=> (a.date||"").localeCompare(b.date||""));
     renderAll();
     if(document.getElementById('panel-calendar').classList.contains('active')) renderCalendar();
+  });
+  db.collection(COL).doc('data').collection('photos').onSnapshot(snap=>{
+    state.photos = snap.docs.map(d=>({id:d.id, ...d.data()})).sort((a,b)=> (b.createdAt||"").localeCompare(a.createdAt||""));
+    renderAll();
   });
   db.collection(COL).doc('data').collection('users').onSnapshot(snap=>{
     state.allUsers = snap.docs.map(d=>({uid:d.id, ...d.data()}));
@@ -1128,6 +1215,104 @@ function renderNotices(){
   const top3 = state.notices.slice(0,3);
   dWrap.innerHTML = top3.length===0 ? `<div class="empty sm">공지사항이 없습니다</div>` :
     top3.map(n=>`<div class="mini-item"><span class="mi-title">${n.pinned?'📌 ':''}${esc(n.title)}</span><span class="mi-sub">${n.createdAt?new Date(n.createdAt).toLocaleDateString('ko-KR',{month:'2-digit',day:'2-digit'}):''}</span></div>`).join('');
+}
+
+/* ================= PHOTOS ================= */
+document.getElementById('phFiles').addEventListener('change', function(e){
+  const files = Array.from(e.target.files || []);
+  const statusEl = document.getElementById('phFilesStatus');
+  if(files.length===0){ statusEl.textContent = '선택된 파일 없음'; return; }
+  const totalMB = (files.reduce((s,f)=>s+f.size,0)/1024/1024).toFixed(1);
+  statusEl.textContent = `${files.length}장 선택됨 (원본 총 ${totalMB}MB, 업로드 시 자동 압축됩니다)`;
+});
+// 사진을 화면에 보기 좋은 크기로 줄이고 용량을 압축해서, 큰 원본 사진도 부담 없이 올릴 수 있게 함
+function compressImage(file, maxDim=1600, quality=0.82){
+  return new Promise((resolve)=>{
+    const reader = new FileReader();
+    reader.onload = (e)=>{
+      const img = new Image();
+      img.onload = ()=>{
+        let { width, height } = img;
+        if(width > maxDim || height > maxDim){
+          if(width > height){ height = Math.round(height * maxDim / width); width = maxDim; }
+          else{ width = Math.round(width * maxDim / height); height = maxDim; }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+        canvas.toBlob(blob=>{ resolve(blob || file); }, 'image/jpeg', quality);
+      };
+      img.onerror = ()=> resolve(file); // 압축 실패 시(예: 일부 브라우저의 HEIC 등) 원본 그대로 업로드
+      img.src = e.target.result;
+    };
+    reader.onerror = ()=> resolve(file);
+    reader.readAsDataURL(file);
+  });
+}
+async function uploadPhotos(){
+  const fileInput = document.getElementById('phFiles');
+  const files = Array.from(fileInput.files || []);
+  if(files.length===0){ toast("사진을 선택하세요."); return; }
+  if(files.length > 20){ toast("한 번에 최대 20장까지 업로드할 수 있습니다."); return; }
+  for(const f of files){ if(f.size > 30*1024*1024){ toast(`'${f.name}' 파일이 30MB를 초과합니다.`); return; } }
+  const caption = document.getElementById('phCaption').value.trim();
+
+  const btn = document.getElementById('phUploadBtn');
+  btn.disabled = true;
+  try{
+    for(let i=0; i<files.length; i++){
+      const f = files[i];
+      btn.textContent = `업로드 중... (${i+1}/${files.length})`;
+      const blob = await compressImage(f);
+      const photoRef = db.collection(COL).doc('data').collection('photos').doc();
+      const path = `${COL}/photos/${photoRef.id}_${Date.now()}.jpg`;
+      const fileRef = storage.ref().child(path);
+      await fileRef.put(blob, {contentType:'image/jpeg'});
+      const url = await fileRef.getDownloadURL();
+      await photoRef.set({
+        url, path, caption, size: blob.size,
+        uploaderName: currentUser.name, uploaderUid: currentUser.uid,
+        createdAt: new Date().toISOString()
+      });
+    }
+    fileInput.value=''; document.getElementById('phFilesStatus').textContent='선택된 파일 없음';
+    document.getElementById('phCaption').value='';
+    toggleForm('photoForm');
+    toast(`사진 ${files.length}장이 업로드되었습니다.`);
+  }catch(e){
+    console.error(e);
+    toast("사진 업로드에 실패했습니다. Firebase Storage 설정을 확인해주세요.");
+  }finally{
+    btn.disabled = false; btn.textContent = '업로드';
+  }
+}
+function deletePhoto(id){
+  const photo = state.photos.find(p=>p.id===id);
+  if(!photo) return;
+  if(!isAdmin && photo.uploaderUid !== currentUser.uid){ toast("본인이 올린 사진만 삭제할 수 있습니다."); return; }
+  if(!confirm("이 사진을 삭제할까요?")) return;
+  if(photo.path) storage.ref().child(photo.path).delete().catch(()=>{});
+  db.collection(COL).doc('data').collection('photos').doc(id).delete();
+}
+function renderPhotos(){
+  const wrap = document.getElementById('photoGrid');
+  if(!wrap) return;
+  if(state.photos.length===0){
+    wrap.innerHTML = `<div class="empty"><b>등록된 사진이 없습니다</b>'+ 사진 올리기'로 첫 사진을 올려보세요.</div>`;
+    return;
+  }
+  wrap.innerHTML = state.photos.map(p=>`
+    <div class="photo-card">
+      <img src="${p.url}" onclick="openImgModal('${p.url}')" loading="lazy">
+      <div class="photo-meta">
+        ${p.caption ? `<div class="photo-caption">${esc(p.caption)}</div>` : ''}
+        <div class="photo-sub">
+          <span>${esc(p.uploaderName||'')} · ${p.createdAt ? new Date(p.createdAt).toLocaleDateString('ko-KR',{month:'2-digit',day:'2-digit'}) : ''}</span>
+          ${(isAdmin || p.uploaderUid===currentUser.uid) ? `<span class="link-x" onclick="deletePhoto('${p.id}')">삭제</span>` : ''}
+        </div>
+      </div>
+    </div>
+  `).join('');
 }
 
 /* ================= CALENDAR / EVENTS ================= */
@@ -2157,6 +2342,7 @@ function renderAll(){
   renderNotices();
   renderEventList();
   renderTimetable();
+  renderPhotos();
   updateDashboard();
   if(isAdmin) renderApproval();
 }
