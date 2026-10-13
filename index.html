@@ -4,6 +4,17 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>전학공 총무장부</title>
+<!-- 카카오톡·문자로 링크를 보낼 때 뜨는 미리보기 카드 -->
+<meta name="description" content="상업과 교사 전문적학습공동체 · 공지, 회비, 일정, 수요조사, 시간표를 한 곳에서">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="전학공 총무장부">
+<meta property="og:title" content="📒 전학공 총무장부">
+<meta property="og:description" content="함께 배우고, 함께 나누고, 함께 자랍니다 🌱 공지·회비·일정·수요조사·시간표를 한 곳에서 확인하세요.">
+<meta property="og:url" content="https://joyounglong6317-lgtm.github.io/junhakgong/">
+<meta property="og:image" content="https://joyounglong6317-lgtm.github.io/junhakgong/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%92%3C/text%3E%3C/svg%3E">
 <style>
   /* 깃허브 페이지 → Apps Script 웹앱 연결용 화면 (파일 이름: jeonhakgong_github_index.html) */
@@ -43,6 +54,18 @@ var link = document.getElementById('openLink');
 link.href = APP_URL;
 frame.addEventListener('load', function(){ setTimeout(function(){ cover.classList.add('hide'); }, 300); });
 frame.src = APP_URL;
+/* 💬 카톡 공유: 안쪽 앱이 공유를 부탁하면 이 바깥 창에서 휴대폰 공유창을 열어줌
+   (공유창에서 카카오톡 → 단톡방 선택) */
+window.addEventListener('message', function(e){
+  var d = e.data || {};
+  if(!d.jhgShare) return;
+  var reply = function(r){ try{ e.source.postMessage({ jhgShareResult:r }, '*'); }catch(err){} };
+  if(!navigator.share){ reply('fail'); return; }
+  navigator.share({ title:String(d.jhgShare.title||''), text:String(d.jhgShare.text||'') })
+    .then(function(){ reply('ok'); })
+    .catch(function(err){ reply(err && err.name === 'AbortError' ? 'ok' : 'fail'); });
+});
+
 /* 학교망·브라우저 설정 때문에 안쪽 화면이 막히면 새 창 버튼을 보여줌 */
 setTimeout(function(){
   if(!cover.classList.contains('hide')){
