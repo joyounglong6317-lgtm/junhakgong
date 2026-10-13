@@ -41,6 +41,7 @@
   <div class="s" id="msg">잠시만 기다려 주세요…</div>
   <a class="open" id="openLink" target="_top" rel="noopener">새 창에서 열기 →</a>
 </div>
+<script src="https://t1.kakaocdn.net/kakao_js_sdk/2.7.2/kakao.min.js" crossorigin="anonymous"></script>
 <iframe id="app" title="전학공 총무장부" allow="clipboard-write" referrerpolicy="no-referrer-when-downgrade"></iframe>
 
 <script>
@@ -48,6 +49,14 @@
    프로젝트를 바꾸거나 '새 배포'로 주소가 바뀌면 이 한 줄만 고치면 됩니다. */
 var APP_URL = 'https:' + '//script.google.com/macros/s/AKfycbyCMPZzeqlaBnisAt-JEQgSr0jUALs7Q4OnXqOD9J_hSONfxiMNsvjyIu-IPwVDbJ_L/exec';
 /* ▲▲▲▲▲▲ */
+
+/* ▼▼▼ 카카오톡 공유 키 (developers.kakao.com 에서 발급한 'JavaScript 키') ▼▼▼
+   비워두면 휴대폰 기본 공유창 → 그것도 안 되면 복사창으로 대신 열립니다. */
+var KAKAO_JS_KEY = '';
+/* ▲▲▲▲▲▲ */
+var SITE_URL = 'https:' + '//joyounglong6317-lgtm.github.io/junhakgong/';
+var OG_IMAGE = SITE_URL + 'og-image.png';
+try{ if(KAKAO_JS_KEY && window.Kakao && !Kakao.isInitialized()) Kakao.init(KAKAO_JS_KEY); }catch(e){}
 
 var frame = document.getElementById('app'), cover = document.getElementById('cover');
 var link = document.getElementById('openLink');
@@ -60,6 +69,30 @@ window.addEventListener('message', function(e){
   var d = e.data || {};
   if(!d.jhgShare) return;
   var reply = function(r){ try{ e.source.postMessage({ jhgShareResult:r }, '*'); }catch(err){} };
+  /* 1순위: 카카오톡 공유 (단톡방 고르는 창이 바로 뜸) */
+  try{
+    if(window.Kakao && Kakao.isInitialized() && Kakao.Share){
+      var title = String(d.jhgShare.title || '전학공 총무장부').slice(0, 100);
+      var body = String(d.jhgShare.body || '').trim();
+      var link = { mobileWebUrl: SITE_URL, webUrl: SITE_URL };
+      /* 짧은 안내(200자 이내)는 글 전체가 보이는 '텍스트형'으로, 긴 글은 그림 카드형으로 */
+      var full = title + '\n\n' + body;
+      if(body && full.length <= 200){
+        Kakao.Share.sendDefault({ objectType: 'text', text: full, link: link, buttonTitle: '총무장부 열기' });
+        reply('ok'); return;
+      }
+      var desc = body.replace(/\s+/g, ' ');
+      if(desc.length > 150) desc = desc.slice(0, 148) + '…';
+      Kakao.Share.sendDefault({
+        objectType: 'feed',
+        content: { title: title, description: desc || '함께 배우고, 함께 나누고, 함께 자랍니다 🌱', imageUrl: OG_IMAGE,
+                   imageWidth: 1200, imageHeight: 630, link: { mobileWebUrl: SITE_URL, webUrl: SITE_URL } },
+        buttons: [{ title: '총무장부 열기', link: { mobileWebUrl: SITE_URL, webUrl: SITE_URL } }]
+      });
+      reply('ok'); return;
+    }
+  }catch(err){}
+  /* 2순위: 휴대폰 기본 공유창 */
   if(!navigator.share){ reply('fail'); return; }
   navigator.share({ title:String(d.jhgShare.title||''), text:String(d.jhgShare.text||'') })
     .then(function(){ reply('ok'); })
